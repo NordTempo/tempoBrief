@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build: web app (Node) -> static Go binary -> distroless (default)
 # or Debian with the Claude Code and Codex CLIs (target "cli").
-FROM node:24-alpine AS web
+# The web and Go stages run on the build machine's platform and cross-compile
+# (CGO is off), so multi-arch builds do not emulate the compiler.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS web
 RUN corepack enable
 WORKDIR /src/web
 COPY web/package.json web/pnpm-lock.yaml ./
@@ -9,14 +11,15 @@ RUN pnpm install --frozen-lockfile
 COPY web/ ./
 RUN pnpm build
 
-FROM golang:1.27-alpine AS go
-ARG VERSION=dev
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS go
+ARG VERSION=dev TARGETOS TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /src/web/dist/app ./web/dist/app
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/tempobrief ./cmd/tempobrief \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/tempobrief ./cmd/tempobrief \
  && mkdir -p /out/data
 
 # Subscription CLIs. Log in once with `docker exec -it <container> claude setup-token`
