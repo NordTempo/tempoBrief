@@ -1,0 +1,9 @@
+# Build and run settings for Tempo Dock. Variables, volume, domain and access
+# live in Dock: see docs/deployment.md.
+[build]
+dockerfile = "Dockerfile"
+
+[deploy]
+port = 8080
+health_check_path = "/healthz"
+health_check_timeout = "60s"
