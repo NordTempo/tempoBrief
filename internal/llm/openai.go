@@ -82,6 +82,9 @@ func (m openAIModel) JSON(ctx context.Context, req Request) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", m.Name(), err)
 	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, &RateLimited{Model: m.Name(), Until: retryAt(resp.Header, raw, time.Now()), Detail: string(raw)}
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s: HTTP %d: %.500s", m.Name(), resp.StatusCode, raw)
 	}

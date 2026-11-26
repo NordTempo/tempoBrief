@@ -18,6 +18,10 @@ import (
 const (
 	scoreBatch  = 40
 	scoreWindow = 24 * time.Hour
+	// Full batches are scored right away; smaller ones at most this often.
+	// Each batch is one request: every 45 minutes is 32 a day, which leaves
+	// room in a free tier's 50 for full batches, duplicate checks and learning.
+	scoreEvery = 45 * time.Minute
 	// Reactions older than this no longer shape taste.
 	tasteMemory = 180 * 24 * time.Hour
 	// Most recent votes shown to the model as examples.
@@ -43,7 +47,8 @@ type scoreAnswer struct {
 	} `json:"stories"`
 }
 
-// score rates every unscored story from the last day.
+// score rates every unscored story from the last day, in batches of
+// scoreBatch, holding back a last smaller batch until scoreEvery has passed.
 func (p *Pipeline) score(ctx context.Context, s settings.Settings) error {
 	if strings.TrimSpace(s.Interests) == "" {
 		return ErrNoInterests
@@ -66,6 +71,12 @@ func (p *Pipeline) score(ctx context.Context, s settings.Settings) error {
 		batch, err := p.DB.UnscoredStories(ctx, p.Now().Add(-scoreWindow), scoreBatch)
 		if err != nil || len(batch) == 0 {
 			return err
+		}
+		if len(batch) < scoreBatch {
+			if p.Now().Sub(p.lastPartial) < p.scoreEvery {
+				return nil
+			}
+			p.lastPartial = p.Now()
 		}
 		done, err := p.scoreBatch(ctx, model, system, batch, signals, s.Learning.Taste)
 		if err != nil {

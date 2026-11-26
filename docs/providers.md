@@ -26,9 +26,17 @@ current provider and model.
 **OpenRouter** (base URL `https://openrouter.ai/api/v1`): requests ask for
 `provider.require_parameters`, so OpenRouter only routes to hosts that honour
 the JSON schema. Free models (IDs ending in `:free`) allow 20 requests a minute
-and 50 a day (1000 after buying 10 credits once), enough for the volume below.
-Pick one whose `supported_parameters` include `structured_outputs`.
+and 50 a day across all free models (1000 after buying 10 credits once). The
+volume below fits in 50, with little to spare. Pick one whose
+`supported_parameters` include `structured_outputs`.
 
-Rough volume for 40 feeds: 300 to 600 new stories a day, so 10 to 15 scoring
-calls, one or two duplicate checks per brief, and a policy rewrite every few
-days.
+Rough volume for 40 feeds: 300 to 600 new stories a day. Scoring sends a full
+batch of 40 right away and a smaller one at most every 45 minutes, so 30 to 40
+scoring calls a day, plus one or two duplicate checks per brief and a policy
+rewrite every few days.
+
+**Rate limits:** when a provider answers 429, tempoBrief stops calling it until
+the time the answer gives (`Retry-After`, `X-RateLimit-Reset`, or OpenRouter's
+copy of it in the error body; 5 minutes if none), logs that once, and picks up
+the waiting stories after. A brief due meanwhile still goes out, without the
+duplicate check.

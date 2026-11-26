@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
@@ -58,6 +60,9 @@ func (m anthropicModel) JSON(ctx context.Context, req Request) ([]byte, error) {
 	if err != nil {
 		var apiErr *anthropic.Error
 		if errors.As(err, &apiErr) {
+			if apiErr.StatusCode == http.StatusTooManyRequests && apiErr.Response != nil {
+				return nil, &RateLimited{Model: m.Name(), Until: retryAt(apiErr.Response.Header, nil, time.Now()), Detail: apiErr.Error()}
+			}
 			return nil, fmt.Errorf("%s: HTTP %d: %s", m.Name(), apiErr.StatusCode, apiErr.Error())
 		}
 		return nil, fmt.Errorf("%s: %w", m.Name(), err)

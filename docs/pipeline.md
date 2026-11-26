@@ -76,7 +76,9 @@ skip it.
 
 ## Scoring
 
-Batches of 40 stories, one line each: id, topic, outlet count and names, title,
+Batches of 40 stories, scored as soon as 40 are waiting; fewer wait until 45
+minutes after the last small batch, so a trickle of new stories does not cost a
+request every minute. One line per story: id, topic, outlet count and names, title,
 240 characters of snippet. The system prompt carries the reader's interests,
 the current policy, and the 12 most recent likes and dislikes. The answer per
 story: score 0 to 10, a summary of at most 25 words in the reader's language,

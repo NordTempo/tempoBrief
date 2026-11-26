@@ -193,6 +193,7 @@ func newHarness(t *testing.T) *harness {
 		NewModel: func(settings.Provider) (llm.Model, error) { return h.model, nil },
 		Now:      func() time.Time { return h.now },
 	})
+	h.p.scoreEvery = 0 // most tests add a story and expect the next tick to score it
 	db.SetMetaTime(ctx, "installed_at", now.Add(-time.Hour))
 	return h
 }
@@ -374,4 +375,66 @@ func mustSettings(t *testing.T, db *store.Store) settings.Settings {
 		t.Fatal(err)
 	}
 	return s
+}
+
+// limitedModel is a provider out of requests until a set time.
+type limitedModel struct {
+	calls int
+	until time.Time
+}
+
+func (m *limitedModel) Name() string { return "fake/free" }
+func (m *limitedModel) JSON(context.Context, llm.Request) ([]byte, error) {
+	m.calls++
+	return nil, &llm.RateLimited{Model: m.Name(), Until: m.until}
+}
+
+func TestOutOfRequestsPausesTheModelUntilReset(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t)
+	limited := &limitedModel{until: h.now.Add(3 * time.Hour)}
+	h.p.NewModel = func(settings.Provider) (llm.Model, error) { return limited, nil }
+
+	h.p.Tick(ctx)
+	for range 5 {
+		h.at(h.now.Add(time.Minute))
+		h.p.Tick(ctx)
+	}
+	if limited.calls != 1 {
+		t.Fatalf("want one call until the reset, got %d", limited.calls)
+	}
+	for _, s := range h.p.Status().Steps {
+		if s.Name == "score" && !strings.Contains(s.LastError, "out of requests until") {
+			t.Fatalf("score status should say it is paused, got %q", s.LastError)
+		}
+	}
+
+	h.p.NewModel = func(settings.Provider) (llm.Model, error) { return h.model, nil }
+	h.at(limited.until.Add(time.Minute))
+	h.p.Tick(ctx)
+	if n, err := h.db.CountScored(ctx, h.now.Add(-24*time.Hour)); err != nil || n == 0 {
+		t.Fatalf("scoring should resume after the reset, scored %d, err %v", n, err)
+	}
+}
+
+func TestSmallBatchesWaitForTheNextScoringRound(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t)
+	h.p.scoreEvery = 30 * time.Minute
+	h.p.Tick(ctx) // the first small batch goes right away
+
+	id, err := h.db.CreateStory(ctx, store.PendingItem{Topic: "Tech", Title: "Claude adds memory", URL: "https://x/1"}, []float32{0, 1, 0, 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.at(h.now.Add(time.Minute))
+	h.p.Tick(ctx)
+	if st, _ := h.db.Story(ctx, id); st.Score != nil {
+		t.Fatal("one new story should wait for the next round")
+	}
+	h.at(h.now.Add(30 * time.Minute))
+	h.p.Tick(ctx)
+	if st, _ := h.db.Story(ctx, id); st.Score == nil {
+		t.Fatal("the story should be scored after scoreEvery")
+	}
 }

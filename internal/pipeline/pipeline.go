@@ -7,6 +7,7 @@ package pipeline
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -47,6 +48,12 @@ type Pipeline struct {
 	Deps
 	mu     sync.Mutex // one step at a time; the tick and API calls share it
 	status statusTracker
+	// The provider said it is out of requests until then. Guarded by mu.
+	modelPausedUntil time.Time
+	// Scoring a batch that is not full waits this long after the last one,
+	// so a trickle of stories does not cost a request a minute. Guarded by mu.
+	scoreEvery  time.Duration
+	lastPartial time.Time
 }
 
 func New(d Deps) *Pipeline {
@@ -56,7 +63,7 @@ func New(d Deps) *Pipeline {
 	if d.NewModel == nil {
 		d.NewModel = llm.New
 	}
-	return &Pipeline{Deps: d}
+	return &Pipeline{Deps: d, scoreEvery: scoreEvery}
 }
 
 const (
@@ -115,16 +122,57 @@ func (p *Pipeline) Tick(ctx context.Context) {
 		}
 		err := step.run(ctx, s)
 		p.status.record(step.name, p.Now(), err)
-		// Waiting for the reader to add interests is a state, not a failure.
-		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrNoInterests) {
+		// Waiting for the reader to add interests, or for the provider's limit
+		// to reset (logged once when it starts), is a state, not a failure.
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrNoInterests) && !errors.Is(err, ErrModelPaused) {
 			p.Log.Error(step.name, "err", err)
 		}
 	}
 }
 
-// model returns the configured model, or an error explaining what is missing.
+// ErrModelPaused means the provider is out of requests for now.
+var ErrModelPaused = errors.New("model paused")
+
+// model returns the configured model, or an error explaining what is missing
+// or that the provider is out of requests for now.
 func (p *Pipeline) model(s settings.Settings) (llm.Model, error) {
-	return p.NewModel(s.Provider)
+	m, err := p.NewModel(s.Provider)
+	if err != nil {
+		return nil, err
+	}
+	pm := pausingModel{Model: m, p: p, loc: s.Location()}
+	if p.Now().Before(p.modelPausedUntil) {
+		return nil, pm.paused()
+	}
+	return pm, nil
+}
+
+// pausingModel stops calling a provider that answered 429 until the time it
+// gave, so a daily cap (OpenRouter's free tier allows 50 requests a day)
+// does not turn into a failed request and an error line every minute.
+type pausingModel struct {
+	llm.Model
+	p   *Pipeline
+	loc *time.Location
+}
+
+func (m pausingModel) JSON(ctx context.Context, req llm.Request) ([]byte, error) {
+	if m.p.Now().Before(m.p.modelPausedUntil) {
+		return nil, m.paused()
+	}
+	out, err := m.Model.JSON(ctx, req)
+	var rl *llm.RateLimited
+	if errors.As(err, &rl) {
+		m.p.modelPausedUntil = rl.Until
+		m.p.Log.Warn("model out of requests, pausing it", "until", rl.Until.In(m.loc).Format(time.DateTime), "err", err)
+		return nil, m.paused()
+	}
+	return out, err
+}
+
+func (m pausingModel) paused() error {
+	return fmt.Errorf("%w: %s is out of requests until %s", ErrModelPaused, m.Name(),
+		m.p.modelPausedUntil.In(m.loc).Format("Mon 15:04"))
 }
 
 func (p *Pipeline) prune(ctx context.Context, _ settings.Settings) error {
