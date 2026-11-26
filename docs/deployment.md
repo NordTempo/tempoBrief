@@ -79,3 +79,10 @@ batch, and idle memory is about 65 MB.
 
 `dock.toml` describes the build and health check. Set `TEMPOBRIEF_PUBLIC_URL`
 to the app's domain and mount a volume at `/data`.
+
+## The marketing page
+
+brief.nordtempo.com is `site/`: one static page served by Caddy. It runs on
+Tempo Dock as `tempobrief/production/site`, connected through Dock's GitHub App
+to `main` with `--dir site`, so every push to `main` that changes `site/`
+deploys it. Nothing in `site/` is part of the app image.

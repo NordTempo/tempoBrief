@@ -1,0 +1,255 @@
+<!doctype html>
+<!--
+  The marketing page for brief.nordtempo.com (design D, "Product"). Static and
+  dependency free: this file plus ./fonts. Colors and fonts mirror the app's
+  tokens in web/src/styles.css. Facts here must match the specs in docs/.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<title>tempoBrief: a self-hosted news brief that learns what you care about</title>
+<meta name="description" content="tempoBrief reads your feeds, groups each event across outlets and languages, ranks it with your own model and sends a short brief to Discord, email, ntfy or Home Assistant. Every story says why it made the cut.">
+<meta property="og:title" content="tempoBrief">
+<meta property="og:description" content="A self-hosted news brief that learns what you care about, and shows its work.">
+<meta property="og:url" content="https://brief.nordtempo.com/">
+<meta property="og:type" content="website">
+<link rel="preload" href="fonts/inter-tight-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+/* Inter Tight and JetBrains Mono, SIL OFL 1.1 (licenses in ./fonts). */
+@font-face{font-family:"Inter Tight";font-weight:400 500;font-display:swap;src:url(fonts/inter-tight-latin.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"JetBrains Mono";font-weight:400;font-display:swap;src:url(fonts/jetbrains-mono-latin.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+:root{
+  --bg:#000;--ink:#f2f2f0;--secondary:#cfcfca;--muted:#9a9a94;--faint:#5a5a56;
+  --line:#1f1f1e;--line-strong:#3a3a38;--surface:#111;--surface-2:#1c1c1b;
+  --good:#3fb950;--bad:#ff6b5a;
+  --sans:"Inter Tight",system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg);color-scheme:dark}
+body{color:var(--ink);font-family:var(--sans);font-size:15px;line-height:22px;-webkit-font-smoothing:antialiased;padding:0 28px}
+a{color:inherit;text-decoration:none}
+a:hover{color:var(--ink)}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:1120px;margin:0 auto}
+.btn{background:var(--ink);color:#000;padding:11px 18px;border-radius:10px;font-weight:500;display:inline-block}
+.btn:hover{color:#000;background:#fff}
+h2,h3{font-weight:500;letter-spacing:-0.02em}
+h2{font-size:34px;line-height:1.05}
+.lede{color:var(--secondary);margin-top:14px;max-width:440px}
+.label{font-size:12px;line-height:16px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-bottom:8px;border-bottom:1px solid var(--line)}
+section.split{border-top:1px solid var(--line);padding:56px 0;display:grid;grid-template-columns:1fr 1fr;gap:64px}
+
+nav{display:flex;justify-content:space-between;align-items:center;height:60px}
+nav .wm{font-weight:500;font-size:17px}
+nav .links{display:flex;gap:24px;color:var(--secondary);font-size:13px;align-items:center}
+nav .btn{padding:6px 12px}
+
+.hero{display:grid;grid-template-columns:1fr 360px;gap:64px;align-items:center;padding:56px 0 72px}
+.hero h1{font-size:64px;line-height:.98;font-weight:500;letter-spacing:-0.03em}
+.hero h1 span{color:var(--muted)}
+.hero p{font-size:17px;line-height:24px;color:var(--secondary);margin-top:24px;max-width:500px}
+.ctas{margin-top:28px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.ctas a:last-child{color:var(--secondary)}
+.fine{margin-top:20px;font-size:13px;color:var(--muted)}
+
+.phone{border:1px solid var(--line-strong);border-radius:36px;padding:14px;height:580px;overflow:hidden}
+.phone .status{display:flex;justify-content:space-between;font-size:12px;color:var(--secondary);padding:4px 14px 18px}
+.phone .lock{text-align:center;padding-bottom:20px}
+.phone .lock b{display:block;font-size:56px;line-height:1;font-weight:500;letter-spacing:-0.03em}
+.phone .lock span{font-size:13px;color:var(--secondary)}
+.note{background:var(--surface-2);border-radius:18px;padding:12px 14px;margin-bottom:8px}
+.note .hd{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.note .tt{font-weight:500;margin-top:4px;font-size:14px;line-height:19px}
+.note .bd{color:var(--secondary);font-size:13px;line-height:18px;margin-top:2px}
+.note .acts{display:flex;gap:6px;margin-top:10px}
+.note .acts span{flex:1;text-align:center;font-size:12px;padding:6px 0;border-radius:10px;background:var(--surface);color:var(--secondary)}
+.note.dim{opacity:.55}
+
+.story .t{font-size:20px;line-height:28px;font-weight:500}
+.story .s{color:var(--secondary);margin-top:6px}
+.story .m{font-size:13px;line-height:18px;color:var(--muted);margin-top:6px}
+.story .m .sc{color:var(--secondary)}
+.good{color:var(--good)}
+.story dl{margin-top:24px;display:grid;grid-template-columns:110px 1fr;font-size:13px;line-height:18px}
+.story dt,.story dd{padding:9px 0;border-top:1px solid var(--line)}
+.story dt{color:var(--muted)}
+.story dd{color:var(--secondary)}
+.story dd b{color:var(--ink);font-family:var(--mono);font-weight:400}
+
+.merge{font-size:13px;line-height:18px}
+.merge .src{display:grid;grid-template-columns:96px 1fr 28px;gap:12px;padding:9px 0;border-top:1px solid var(--line);color:var(--secondary)}
+.merge .src span:first-child{color:var(--muted)}
+.merge .src span:last-child{color:var(--faint);font-family:var(--mono);text-align:right}
+.merge .one{padding:14px 0 0;border-top:1px solid var(--line-strong);font-size:17px;line-height:24px;font-weight:500}
+.merge .one small{display:block;font-weight:400;font-size:13px;color:var(--muted);margin-top:2px}
+
+.diff{font-family:var(--mono);font-size:13px;line-height:20px;background:var(--surface);border-radius:10px;padding:14px 0;overflow-x:auto}
+.diff div{padding:2px 16px;white-space:pre;color:var(--secondary)}
+.diff .hd{color:var(--muted);padding-bottom:8px}
+.diff .add{color:var(--good);background:rgba(63,185,80,.08)}
+.diff .del{color:var(--bad);background:rgba(255,107,90,.08)}
+.diff p{color:var(--faint);padding:8px 16px 0;font-family:var(--sans)}
+
+.facts{border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(3,1fr);gap:0 40px;padding:40px 0}
+.facts ul{list-style:none}
+.facts li{padding:8px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}
+.facts li span:last-child{color:var(--muted);font-size:13px;text-align:right}
+
+.end{border-top:1px solid var(--line);padding:56px 0;text-align:center}
+.end h2{font-size:48px;line-height:1}
+.cmd{display:inline-block;margin-top:24px;font-family:var(--mono);font-size:13px;line-height:20px;background:var(--surface);padding:12px 16px;border-radius:10px;color:var(--secondary);max-width:100%;overflow-x:auto;white-space:pre;text-align:left}
+.cmd .c{color:var(--faint)}
+.end p{margin-top:16px;color:var(--muted);font-size:13px}
+.end p a{color:var(--secondary)}
+
+footer{border-top:1px solid var(--line);padding:20px 0 28px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;gap:16px}
+footer .links{display:flex;gap:20px}
+
+@media (max-width:760px){
+  body{padding:0 18px}
+  nav .links a:not(.btn){display:none}
+  .hero{grid-template-columns:1fr;gap:40px;padding:32px 0 48px}
+  .hero h1{font-size:42px}
+  .phone{height:520px;max-width:360px;width:100%;margin:0 auto}
+  section.split{grid-template-columns:1fr;gap:28px;padding:40px 0}
+  .facts{grid-template-columns:1fr;gap:28px}
+  .end h2{font-size:34px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a class="wm" href="/">tempoBrief</a>
+    <div class="links">
+      <a href="#learns">How it learns</a>
+      <a href="https://github.com/NordTempo/tempoBrief/tree/main/docs">Docs</a>
+      <a href="https://github.com/NordTempo/tempoBrief">GitHub</a>
+      <a class="btn" href="#install">Self-host</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <h1>It learns what you care about. <span>And shows its work.</span></h1>
+      <p>A self-hosted news brief that reads your feeds, groups each event across outlets and languages, and ranks it with your own model. Every story says why it made the cut.</p>
+      <div class="ctas"><a class="btn" href="#install">Self-host tempoBrief</a><a href="https://github.com/NordTempo/tempoBrief">Read the code</a></div>
+      <div class="fine">Free and MIT licensed. Bring a Claude or OpenAI-compatible key, Ollama, or the Claude Code and Codex CLIs.</div>
+    </div>
+    <figure class="phone" role="img" aria-label="A phone lock screen with a breaking alert from ntfy with vote buttons, the morning brief from ntfy, and a Discord message.">
+      <div class="status" aria-hidden="true"><span class="num">07:02</span><span>●●●</span></div>
+      <div class="lock" aria-hidden="true"><b class="num">07:02</b><span>Thursday 26 November</span></div>
+      <div class="note" aria-hidden="true">
+        <div class="hd"><span>ntfy · tempoBrief alert</span><span>now</span></div>
+        <div class="tt">Norges Bank holds the policy rate, signals a cut in spring</div>
+        <div class="bd">8.7 · 6 outlets · matches "Norwegian monetary policy"</div>
+        <div class="acts"><span>▲ More</span><span>▼ Less</span><span>Open</span></div>
+      </div>
+      <div class="note" aria-hidden="true">
+        <div class="hd"><span>ntfy · Morning brief</span><span>7:00</span></div>
+        <div class="tt">6 stories for Thursday</div>
+        <div class="bd">Fornebu line opening pushed to 2029 · EU opens inquiry into cloud egress fees · and 4 more</div>
+      </div>
+      <div class="note dim" aria-hidden="true">
+        <div class="hd"><span>Discord · #brief</span><span>7:00</span></div>
+        <div class="tt">Morning brief · 6 stories</div>
+        <div class="bd">Economy 2 · Oslo 1 · Tech 2 · Science 1</div>
+      </div>
+    </figure>
+  </header>
+
+  <section class="split">
+    <div>
+      <h2>Every story says why.</h2>
+      <p class="lede">The score, the outlets, the interest it matched and what your past reactions added. Nothing is ranked by a hidden weight.</p>
+    </div>
+    <div class="story">
+      <div class="t">Fornebu line opening pushed to 2029</div>
+      <div class="s">Tunnel work under Lysaker takes longer than planned; buses keep running on the old route until then.</div>
+      <div class="m"><span class="sc num">7.6</span> · 3 outlets · local transit · <span class="good">like 4 you liked</span></div>
+      <dl>
+        <dt>7.6</dt><dd>Your model scored <b>6.4</b>, your taste added <b>+1.2</b></dd>
+        <dt>3 outlets</dt><dd>Aftenposten, NRK and Budstikka, grouped into one story</dd>
+        <dt>local transit</dt><dd>Your model's reason, written against your interests</dd>
+        <dt>like 4 you liked</dt><dd>The closest stories you voted up before</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section class="split">
+    <div>
+      <h2>Five front pages. One story.</h2>
+      <p class="lede">A multilingual model runs on your server and folds the same event into one story, whatever the outlet or language. No model call, no API cost. How many outlets cover it becomes a signal.</p>
+    </div>
+    <div class="merge">
+      <div class="src"><span>NRK</span><span>Norges Bank holder renten uendret</span><span>nb</span></div>
+      <div class="src"><span>E24</span><span>Rentebeslutning: kutt kan komme til våren</span><span>nb</span></div>
+      <div class="src"><span>Reuters</span><span>Norway's central bank holds rates, eyes spring cut</span><span>en</span></div>
+      <div class="src"><span>Bloomberg</span><span>Norges Bank keeps key rate at 4%</span><span>en</span></div>
+      <div class="one">Norges Bank holds the policy rate, signals a cut in spring<small><span class="num">8.7</span> · 6 outlets · summary in your language</small></div>
+    </div>
+  </section>
+
+  <section class="split" id="learns">
+    <div>
+      <h2>Your reactions become rules you can read.</h2>
+      <p class="lede">Votes, opens and skips all count. Every few days your model rewrites the editorial policy from them and tells you what changed. Edit any line or roll back. Your own interests always outrank it.</p>
+    </div>
+    <div class="diff">
+      <div class="hd">policy v6 → v7 · from 42 reactions</div>
+      <div>  Prefer primary reporting on Norwegian politics.</div>
+      <div>  Football only when Norway or Bodø/Glimt plays.</div>
+      <div class="del">- Score all EU tech stories 7 or higher.</div>
+      <div class="add">+ EU tech: enforcement 7+, opinion 4 or lower.</div>
+      <div class="add">+ Oslo transit delays are local news, 7+.</div>
+      <p>You voted down 5 EU opinion pieces and opened every story about the Fornebu line.</p>
+    </div>
+  </section>
+
+  <section class="facts">
+    <div>
+      <div class="label">In</div>
+      <ul>
+        <li><span>RSS, Atom, JSON Feed</span><span>any outlet</span></li>
+        <li><span>OPML import</span><span>bring your reader</span></li>
+        <li><span>Google News search</span><span>any topic</span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="label">Out</div>
+      <ul>
+        <li><span>Discord, ntfy, email</span><span>with votes</span></li>
+        <li><span>Webhooks, Home Assistant</span><span>JSON</span></li>
+        <li><span>RSS out</span><span>any reader</span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="label">Runs on</div>
+      <ul>
+        <li><span>One Go binary</span><span>SQLite inside</span></li>
+        <li><span>65 MB idle</span><span>amd64, arm64</span></li>
+        <li><span>Telemetry</span><span>none</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="end" id="install">
+    <h2>Tomorrow's brief, tonight.</h2>
+    <div class="cmd">docker run -d --name tempobrief -p 8080:8080 -v tempobrief:/data \
+  -e TEMPOBRIEF_PUBLIC_URL=https://brief.example.com \
+  ghcr.io/nordtempo/tempobrief:latest
+docker logs tempobrief   <span class="c"># prints the generated password once</span></div>
+    <p>Then write your interests, add feeds, connect a model and a channel. Subscription instead of a key? <a href="https://github.com/NordTempo/tempoBrief/blob/main/docs/providers.md">Use the -cli image</a>.</p>
+  </section>
+
+  <footer>
+    <span>tempoBrief by <a href="https://nordtempo.com">NordTempo</a></span>
+    <span class="links"><a href="https://github.com/NordTempo/tempoBrief/blob/main/LICENSE">MIT</a><a href="https://github.com/NordTempo/tempoBrief">GitHub</a></span>
+  </footer>
+</div>
+</body>
+</html>
