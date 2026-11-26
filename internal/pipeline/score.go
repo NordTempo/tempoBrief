@@ -1,12 +1,15 @@
 package pipeline
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/NordTempo/tempoBrief/internal/embed"
 	"github.com/NordTempo/tempoBrief/internal/llm"
 	"github.com/NordTempo/tempoBrief/internal/settings"
 	"github.com/NordTempo/tempoBrief/internal/store"
@@ -19,6 +22,12 @@ const (
 	tasteMemory = 180 * 24 * time.Hour
 	// Most recent votes shown to the model as examples.
 	promptExamples = 12
+	// Scored stories at least this similar to a new one are shown to the
+	// model as possible duplicates. Low on purpose: in this band embeddings
+	// cannot tell the same event from a related one (see docs/pipeline.md), so
+	// the model decides. At most sameEventPerStory per story.
+	sameEventFloor    = 0.85
+	sameEventPerStory = 3
 )
 
 // ErrNoInterests stops scoring until the reader has said what they want.
@@ -30,6 +39,7 @@ type scoreAnswer struct {
 		Score   int    `json:"score" desc:"0 to 10"`
 		Summary string `json:"summary"`
 		Reason  string `json:"reason"`
+		SameAs  int64  `json:"sameAs" desc:"id of an earlier or listed story about the same event, else 0"`
 	} `json:"stories"`
 }
 
@@ -69,11 +79,23 @@ func (p *Pipeline) score(ctx context.Context, s settings.Settings) error {
 }
 
 func (p *Pipeline) scoreBatch(ctx context.Context, model llm.Model, system string, batch []store.Story, signals []store.Signal, useTaste bool) (int, error) {
+	vectors, earlier, err := p.sameEventCandidates(ctx, batch)
+	if err != nil {
+		return 0, err
+	}
 	lines := make([]string, len(batch))
 	for i, st := range batch {
 		lines[i] = describe(st)
 	}
-	answer, err := llm.Generate[scoreAnswer](ctx, model, system, strings.Join(lines, "\n"), "low")
+	prompt := strings.Join(lines, "\n")
+	if len(earlier) > 0 {
+		prev := make([]string, len(earlier))
+		for i, st := range earlier {
+			prev[i] = fmt.Sprintf("earlier id=%d | %s | %s", st.ID, st.Title, st.Summary)
+		}
+		prompt += "\n\nEarlier stories, already scored. Only for sameAs; return no entries for them:\n" + strings.Join(prev, "\n")
+	}
+	answer, err := llm.Generate[scoreAnswer](ctx, model, system, prompt, "low")
 	if err != nil {
 		return 0, err
 	}
@@ -83,11 +105,8 @@ func (p *Pipeline) scoreBatch(ctx context.Context, model llm.Model, system strin
 	for _, st := range batch {
 		byID[st.ID] = st
 	}
-	var vectors map[int64][]float32
-	if useTaste && len(signals) > 0 {
-		if vectors, err = p.storyVectors(ctx, batch); err != nil {
-			return 0, err
-		}
+	if !useTaste {
+		signals = nil
 	}
 	var out []store.Scored
 	for _, a := range answer.Stories {
@@ -97,7 +116,7 @@ func (p *Pipeline) scoreBatch(ctx context.Context, model llm.Model, system strin
 		delete(byID, a.ID)
 		llmScore := max(0, min(10, a.Score))
 		var t TasteResult
-		if v := vectors[a.ID]; v != nil {
+		if v := vectors[a.ID]; v != nil && len(signals) > 0 {
 			t = Taste(v, signals)
 		}
 		sc := store.Scored{
@@ -109,26 +128,117 @@ func (p *Pipeline) scoreBatch(ctx context.Context, model llm.Model, system strin
 		}
 		out = append(out, sc)
 	}
-	return len(out), p.DB.SaveScores(ctx, out)
+	if err := p.DB.SaveScores(ctx, out); err != nil {
+		return 0, err
+	}
+	p.mergeSameEvent(ctx, answer, batch, earlier)
+	return len(out), nil
 }
 
-// storyVectors loads centroids for a batch (the story list query skips them).
-func (p *Pipeline) storyVectors(ctx context.Context, batch []store.Story) (map[int64][]float32, error) {
+// sameEventCandidates loads the batch's vectors (the story list query skips
+// them) and the scored stories most similar to each, for the sameAs check.
+func (p *Pipeline) sameEventCandidates(ctx context.Context, batch []store.Story) (map[int64][]float32, []store.Story, error) {
 	open, err := p.DB.OpenCentroids(ctx, p.Now().Add(-scoreWindow-storyWindow))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	want := make(map[int64]bool, len(batch))
+	vectors := make(map[int64][]float32, len(batch))
 	for _, st := range batch {
-		want[st.ID] = true
+		vectors[st.ID] = nil
 	}
-	out := make(map[int64][]float32, len(batch))
 	for _, c := range open {
-		if want[c.StoryID] {
-			out[c.StoryID] = c.Vector
+		if _, ok := vectors[c.StoryID]; ok {
+			vectors[c.StoryID] = c.Vector
 		}
 	}
-	return out, nil
+	type near struct {
+		id  int64
+		sim float32
+	}
+	picked := map[int64]bool{}
+	var ids []int64
+	for _, st := range batch {
+		v := vectors[st.ID]
+		if v == nil {
+			continue
+		}
+		var best []near
+		for _, c := range open {
+			if _, inBatch := vectors[c.StoryID]; inBatch {
+				continue // the model sees the whole batch anyway
+			}
+			if sim := embed.Similarity(v, c.Vector); sim >= sameEventFloor {
+				best = append(best, near{c.StoryID, sim})
+			}
+		}
+		slices.SortFunc(best, func(a, b near) int { return cmp.Compare(b.sim, a.sim) })
+		for _, n := range best[:min(len(best), sameEventPerStory)] {
+			if !picked[n.id] {
+				picked[n.id] = true
+				ids = append(ids, n.id)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return vectors, nil, nil
+	}
+	list, err := p.DB.StoriesByID(ctx, ids)
+	if err != nil {
+		return nil, nil, err
+	}
+	earlier := list[:0]
+	for _, st := range list {
+		if st.Score != nil { // unscored ones are in a later batch and get their own check
+			earlier = append(earlier, st)
+		}
+	}
+	return vectors, earlier, nil
+}
+
+// mergeSameEvent merges stories the model marked as the same event. Each group
+// keeps its oldest story (the lowest id), which may be one already shown or
+// briefed: a later duplicate of a briefed story is then not briefed again.
+func (p *Pipeline) mergeSameEvent(ctx context.Context, answer scoreAnswer, batch, earlier []store.Story) {
+	valid := map[int64]bool{}
+	for _, st := range batch {
+		valid[st.ID] = true
+	}
+	for _, st := range earlier {
+		valid[st.ID] = true
+	}
+	// Union-find whose root is the smallest id, so chains and cycles settle.
+	parent := map[int64]int64{}
+	var root func(int64) int64
+	root = func(id int64) int64 {
+		if up, ok := parent[id]; ok && up != id {
+			r := root(up)
+			parent[id] = r
+			return r
+		}
+		return id
+	}
+	for _, a := range answer.Stories {
+		if a.SameAs == 0 || a.SameAs == a.ID || !valid[a.ID] || !valid[a.SameAs] {
+			continue
+		}
+		ra, rb := root(a.ID), root(a.SameAs)
+		if ra != rb {
+			parent[max(ra, rb)] = min(ra, rb)
+		}
+	}
+	groups := map[int64][]int64{}
+	for id := range parent {
+		if r := root(id); r != id {
+			groups[r] = append(groups[r], id)
+		}
+	}
+	for keep, drop := range groups {
+		if err := p.DB.MergeStories(ctx, keep, drop); err != nil {
+			p.Log.Warn("merge same event", "err", err)
+			continue
+		}
+		p.Log.Info("merged same event", "keep", keep, "merged", drop)
+	}
 }
 
 func describe(st store.Story) string {
@@ -188,7 +298,12 @@ Return one entry per story:
   but it never overrides the reader's interests.
 - summary: one plain sentence, at most 25 words, saying concretely what happened.
   Written in %s. No hype.
-- reason: at most 10 words, in %s, on why it does or does not fit this reader.`,
+- reason: at most 10 words, in %s, on why it does or does not fit this reader.
+- sameAs: the id of a story that reports the same event as this one, from the
+  earlier stories listed after the candidates or from the candidates
+  themselves; otherwise 0. The same event means the same incident, release,
+  announcement or study, also when written in another language or from
+  another angle. A different event on the same topic is not the same.`,
 		strings.TrimSpace(s.Interests), policy, liked, disliked, s.Language, s.Language), nil
 }
 

@@ -52,7 +52,10 @@ type fakeModel struct {
 	prompts []string
 }
 
-var idRe = regexp.MustCompile(`id=(\d+) \| \S+ \| \d+ outlet\(s\): [^|]* \| ([^|]+) \|`)
+var (
+	idRe      = regexp.MustCompile(`id=(\d+) \| \S+ \| \d+ outlet\(s\): [^|]* \| ([^|]+) \|`)
+	earlierRe = regexp.MustCompile(`earlier id=(\d+) \| ([^|]+) \|`)
+)
 
 func (m *fakeModel) Name() string { return "fake/model" }
 
@@ -67,9 +70,19 @@ func (m *fakeModel) JSON(_ context.Context, req llm.Request) ([]byte, error) {
 			Score   int    `json:"score"`
 			Summary string `json:"summary"`
 			Reason  string `json:"reason"`
+			SameAs  int64  `json:"sameAs"`
 		}
 		var out struct {
 			Stories []entry `json:"stories"`
+		}
+		// Stories about "Rust" are one event: each points at the oldest one listed.
+		var rust int64
+		for _, m := range append(earlierRe.FindAllStringSubmatch(req.Prompt, -1), idRe.FindAllStringSubmatch(req.Prompt, -1)...) {
+			var id int64
+			fmt.Sscan(m[1], &id)
+			if strings.Contains(m[2], "Rust") && (rust == 0 || id < rust) {
+				rust = id
+			}
 		}
 		for _, match := range idRe.FindAllStringSubmatch(req.Prompt, -1) {
 			var id int64
@@ -78,7 +91,11 @@ func (m *fakeModel) JSON(_ context.Context, req llm.Request) ([]byte, error) {
 			if strings.Contains(match[2], "rate") || strings.Contains(match[2], "renten") || strings.Contains(match[2], "Claude") {
 				score = 8
 			}
-			out.Stories = append(out.Stories, entry{id, score, "Summary of " + strings.TrimSpace(match[2]), "fits"})
+			var same int64
+			if strings.Contains(match[2], "Rust") && rust != id {
+				same = rust
+			}
+			out.Stories = append(out.Stories, entry{id, score, "Summary of " + strings.TrimSpace(match[2]), "fits", same})
 		}
 		return json.Marshal(out)
 	case strings.Contains(req.System, "same event"):
@@ -319,6 +336,34 @@ func TestBriefMergesDuplicateStories(t *testing.T) {
 	}
 	if len(norse) != 1 || len(norse[0].Sources) != 2 {
 		t.Fatalf("want one merged Norse story with both outlets, got %+v", norse)
+	}
+}
+
+func TestScoringMergesALaterStoryAboutTheSameEvent(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t)
+	h.p.Tick(ctx)
+	withItem := func(title, source string, vec []float32) int64 {
+		id, _ := h.db.CreateStory(ctx, store.PendingItem{Topic: "Tech", Title: title, URL: "https://x/" + source, Source: source}, vec)
+		h.db.DB.Exec("INSERT INTO items(feed_id, guid, url, title, snippet, source, published_at, seen_at, story_id) VALUES(1, ?, ?, ?, '', ?, 0, 0, ?)",
+			source, "https://x/"+source, title, source, id)
+		return id
+	}
+	// Close enough to be shown to the model, too far apart for grouping to join them.
+	first := withItem("Migrating our Messages API to Rust", "Anthropic", []float32{0, 0, 0.6, 0.8})
+	h.p.Tick(ctx)
+	later := withItem("Anthropic moves its Claude API to Rust", "InfoWorld", []float32{0, 0, 0.5, 0.866})
+	h.p.Tick(ctx)
+
+	stories, _ := h.db.ListStories(ctx, store.StoryFilter{Since: h.now.Add(-24 * time.Hour)})
+	var rust []store.Story
+	for _, st := range stories {
+		if strings.Contains(st.Title, "Rust") {
+			rust = append(rust, st)
+		}
+	}
+	if len(rust) != 1 || rust[0].ID != first || len(rust[0].Sources) != 2 {
+		t.Fatalf("want story %d alone, with both outlets; got %+v (later was %d)", first, rust, later)
 	}
 }
 

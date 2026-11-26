@@ -115,7 +115,8 @@ type StoryFilter struct {
 
 // ListStories returns scored stories, best first.
 func (s *Store) ListStories(ctx context.Context, f StoryFilter) ([]Story, error) {
-	where := []string{"s.first_seen >= ?", "s.score IS NOT NULL", "s.score >= ?"}
+	// n_items is 0 once a story was merged into another.
+	where := []string{"s.first_seen >= ?", "s.score IS NOT NULL", "s.score >= ?", "s.n_items > 0"}
 	args := []any{f.Since.Unix(), f.MinScore}
 	if f.Topic != "" {
 		where = append(where, "s.topic = ?")
@@ -139,7 +140,7 @@ func (s *Store) ListStories(ctx context.Context, f StoryFilter) ([]Story, error)
 
 // Topics lists topics that have stories since the given time, for filters.
 func (s *Store) Topics(ctx context.Context, since time.Time) ([]string, error) {
-	rows, err := s.DB.QueryContext(ctx, "SELECT DISTINCT topic FROM stories WHERE first_seen >= ? ORDER BY topic", since.Unix())
+	rows, err := s.DB.QueryContext(ctx, "SELECT DISTINCT topic FROM stories WHERE first_seen >= ? AND n_items > 0 ORDER BY topic", since.Unix())
 	if err != nil {
 		return nil, err
 	}
@@ -196,9 +197,10 @@ type Centroid struct {
 	Vector  []float32
 }
 
-// OpenCentroids returns stories that new items may still join.
+// OpenCentroids returns stories that new items may still join. Merged-away
+// stories are left out.
 func (s *Store) OpenCentroids(ctx context.Context, since time.Time) ([]Centroid, error) {
-	rows, err := s.DB.QueryContext(ctx, "SELECT id, n_items, centroid FROM stories WHERE last_seen >= ?", since.Unix())
+	rows, err := s.DB.QueryContext(ctx, "SELECT id, n_items, centroid FROM stories WHERE last_seen >= ? AND n_items > 0", since.Unix())
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +438,7 @@ func (s *Store) BriefCandidates(ctx context.Context, since time.Time, minScore f
 
 // AlertCandidates are fresh, high-scoring stories not alerted yet.
 func (s *Store) AlertCandidates(ctx context.Context, since time.Time, minScore float64, minSources int) ([]Story, error) {
-	list, err := s.queryStories(ctx, `s.alerted_at IS NULL AND s.score >= ? AND s.first_seen >= ?
+	list, err := s.queryStories(ctx, `s.alerted_at IS NULL AND s.n_items > 0 AND s.score >= ? AND s.first_seen >= ?
 		ORDER BY s.score DESC LIMIT 50`, minScore, since.Unix())
 	if err != nil {
 		return nil, err

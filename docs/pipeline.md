@@ -58,9 +58,21 @@ events about the same company or case 0.90 to 0.93, the same event 0.93 to
 0.99, the same event in Norwegian and English about 0.93. No threshold
 separates the middle band, so grouping only takes the confident part.
 
-Before a brief goes out, the model groups the brief's candidates by event, and
-each group is merged into its best-scored story (items move over, so it lists
-every outlet). That catches the middle band without a model call per headline.
+The model catches the middle band, without a call of its own:
+
+- **While scoring.** Each scoring call also lists, for every story, up to three
+  already scored stories of the last two days with a similarity of 0.85 or
+  more. The model answers `sameAs` per story: the id of a listed or earlier
+  story about the same event, or 0. Each group is merged into its oldest story
+  (items move over, so it lists every outlet), so a duplicate of a story
+  already briefed is not briefed again. Measured: three wordings of one event
+  scored 0.89 to 0.91 with each other, while a different Rust migration story
+  scored 0.92, so embeddings alone cannot decide.
+- **Before a brief.** The model groups the brief's candidates by event once
+  more, and each group is merged into its best-scored story.
+
+A merged-away story keeps its row with no items; lists, alerts and grouping
+skip it.
 
 ## Scoring
 
