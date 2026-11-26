@@ -25,6 +25,7 @@ import {
 	TextField,
 	Toggle,
 } from "../components/ui";
+import { DiscordSetup } from "./DiscordSetup";
 
 const PROVIDERS: { value: ProviderKind; label: string; hint: string }[] = [
 	{
@@ -655,30 +656,7 @@ function ChannelEditor({
 					})
 				}
 			/>
-			{c.kind === "discord" && (
-				<>
-					<TextField
-						label="Bot token"
-						secret
-						value={c.discordToken ?? ""}
-						onInput={set("discordToken")}
-						hint="Create a bot at discord.com/developers, invite it with Send Messages."
-					/>
-					<TextField
-						label="Channel ID"
-						value={c.discordChannelId ?? ""}
-						onInput={set("discordChannelId")}
-						inputMode="numeric"
-					/>
-					<TextField
-						label="Only this user may vote (user ID)"
-						value={c.discordOwnerId ?? ""}
-						onInput={set("discordOwnerId")}
-						inputMode="numeric"
-						hint="Optional."
-					/>
-				</>
-			)}
+			{c.kind === "discord" && <DiscordSetup channel={c} onChange={onChange} />}
 			{c.kind === "email" && (
 				<>
 					<div class="grid grid-cols-[1fr_96px] gap-4">

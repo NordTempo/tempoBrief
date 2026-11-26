@@ -291,6 +291,29 @@ type TestChannelRequest struct {
 	ChannelID string `json:"channelId"`
 }
 
+// DiscordCheckRequest checks a bot token. An empty or redacted token means
+// the saved token of channel ChannelID.
+type DiscordCheckRequest struct {
+	Token     string `json:"token"`
+	ChannelID string `json:"channelId"`
+}
+
+// DiscordBot is what the token reveals: the bot, who made it (the one who
+// may vote), an invite link and the channels it can post in.
+type DiscordBot struct {
+	Name      string           `json:"name"`
+	OwnerID   string           `json:"ownerId"`
+	OwnerName string           `json:"ownerName"`
+	InviteURL string           `json:"inviteUrl"`
+	Channels  []DiscordChannel `json:"channels"`
+}
+
+type DiscordChannel struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Guild string `json:"guild"`
+}
+
 type TestResult struct {
 	OK     bool   `json:"ok"`
 	Detail string `json:"detail"`

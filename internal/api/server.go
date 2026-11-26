@@ -116,6 +116,7 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("POST /api/v1/settings/read-token", s.rotateReadToken)
 	private.HandleFunc("POST /api/v1/settings/test-provider", s.testProvider)
 	private.HandleFunc("POST /api/v1/settings/test-channel", s.testChannel)
+	private.HandleFunc("POST /api/v1/discord/check", s.discordCheck)
 
 	private.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")

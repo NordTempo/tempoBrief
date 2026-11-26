@@ -291,6 +291,30 @@ export interface SettingsResponse {
 export interface TestChannelRequest {
   channelId: string;
 }
+/**
+ * DiscordCheckRequest checks a bot token. An empty or redacted token means
+ * the saved token of channel ChannelID.
+ */
+export interface DiscordCheckRequest {
+  token: string;
+  channelId: string;
+}
+/**
+ * DiscordBot is what the token reveals: the bot, who made it (the one who
+ * may vote), an invite link and the channels it can post in.
+ */
+export interface DiscordBot {
+  name: string;
+  ownerId: string;
+  ownerName: string;
+  inviteUrl: string;
+  channels: DiscordChannel[];
+}
+export interface DiscordChannel {
+  id: string;
+  name: string;
+  guild: string;
+}
 export interface TestResult {
   ok: boolean;
   detail: string;

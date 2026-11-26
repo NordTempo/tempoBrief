@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -117,4 +118,40 @@ func (s *Server) testChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, TestResult{OK: true, Detail: "sent"})
+}
+
+// discordCheck looks a bot up by its token, for the Discord setup steps.
+func (s *Server) discordCheck(w http.ResponseWriter, r *http.Request) {
+	var body DiscordCheckRequest
+	if !readJSON(w, r, &body) {
+		return
+	}
+	token := strings.TrimSpace(body.Token)
+	if token == "" || token == settings.Redacted {
+		st, ok := s.settings(w, r)
+		if !ok {
+			return
+		}
+		c, _ := st.Channel(body.ChannelID)
+		token = c.DiscordToken
+	}
+	if token == "" {
+		writeFieldError(w, "token", "paste the bot's token")
+		return
+	}
+	bot, err := deliver.CheckDiscordBot(r.Context(), token)
+	if errors.Is(err, deliver.ErrDiscordToken) {
+		writeFieldError(w, "token", "Discord does not accept this token. Copy it again after Reset Token.")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "discord", err.Error())
+		return
+	}
+	out := DiscordBot{Name: bot.Name, OwnerID: bot.OwnerID, OwnerName: bot.OwnerName, InviteURL: bot.InviteURL,
+		Channels: []DiscordChannel{}}
+	for _, c := range bot.Channels {
+		out.Channels = append(out.Channels, DiscordChannel{ID: c.ID, Name: c.Name, Guild: c.Guild})
+	}
+	writeJSON(w, http.StatusOK, out)
 }

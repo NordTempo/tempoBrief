@@ -30,5 +30,6 @@ reads also answer without one, minus the reader's reactions
 | `GET /api/v1/settings` · `PUT /api/v1/settings` | Settings (secrets redacted) and feed URLs |
 | `POST /api/v1/settings/read-token` | Rotate the read token |
 | `POST /api/v1/settings/test-provider` · `POST /api/v1/settings/test-channel` `{channelId}` | Checks |
+| `POST /api/v1/discord/check` `{token, channelId}` | The bot behind a token: name, owner, invite link, channels it can post in ([delivery.md](delivery.md#discord)) |
 
 Public link routes are described in [delivery.md](delivery.md#links).
