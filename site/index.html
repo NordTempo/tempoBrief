@@ -240,6 +240,7 @@ footer .links{display:flex;gap:20px}
   <section class="end" id="install">
     <h2>Tomorrow's brief, tonight.</h2>
     <div class="cmd">docker run -d --name tempobrief -p 8080:8080 -v tempobrief:/data \
+  -e TEMPOBRIEF_PUBLIC_URL=https://brief.example.com \
   ghcr.io/nordtempo/tempobrief:latest
 docker logs tempobrief   <span class="c"># prints the generated password once</span></div>
     <p>Then write your interests, add feeds, connect a model and a channel. Subscription instead of a key? <a href="https://github.com/NordTempo/tempoBrief/blob/main/docs/providers.md">Use the -cli image</a>.</p>
