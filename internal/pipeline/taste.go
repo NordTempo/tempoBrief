@@ -30,6 +30,8 @@ var signalValue = map[store.SignalKind]float64{
 	store.SignalDisliked: -1,
 	store.SignalClicked:  0.5,
 	store.SignalIgnored:  -0.25,
+	// Reported as missed: the reader went looking for it, so it says more than a like.
+	store.SignalMissed: 1.5,
 }
 
 // TasteResult is the taste estimate for one story.
@@ -70,7 +72,7 @@ func Taste(v []float32, signals []store.Signal) TasteResult {
 		sum += w * n.value
 		weights += w
 	}
-	value := sum / weights
+	value := math.Max(-1, math.Min(1, sum/weights))
 	confidence := math.Min(1, float64(len(near))/tasteFullAt)
 	return TasteResult{
 		Value:      round2(value),

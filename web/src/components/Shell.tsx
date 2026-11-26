@@ -36,7 +36,8 @@ const idle = "text-muted hover:text-ink";
  * The app frame. Signed in, wide screens get the nav in the header and phones
  * get a tab bar at the bottom, within thumb reach. Visitors only have Brief
  * and Stories, so their nav fits in the header on every screen. Log in or
- * Log out sits at the right of the header.
+ * Log out sits at the right of the header; signed in, "Missed?" sits next to
+ * it, so a story heard about elsewhere can be reported from any page.
  */
 export function Shell({
 	signedIn,
@@ -64,9 +65,17 @@ export function Shell({
 						))}
 					</nav>
 					{signedIn ? (
-						<button type="button" class={`ml-auto min-h-11 ${idle}`} onClick={onLogOut}>
-							Log out
-						</button>
+						<>
+							<a
+								href="/missed"
+								class={`ml-auto flex min-h-11 items-center ${path === "/missed" ? active : idle}`}
+							>
+								Missed?
+							</a>
+							<button type="button" class={`min-h-11 ${idle}`} onClick={onLogOut}>
+								Log out
+							</button>
+						</>
 					) : (
 						<a
 							href="/login"

@@ -84,6 +84,11 @@ export interface Story {
   vote: number /* int */;
   clicked: boolean;
   ignored: boolean;
+  missed: boolean;
+  /**
+   * MissedNote is the reader's reason, when they reported it as missed.
+   */
+  missedNote: string;
   briefed: boolean;
 }
 export interface StoriesResponse {
@@ -184,13 +189,55 @@ export interface SignalCounts {
   disliked: number /* int */;
   clicked: number /* int */;
   ignored: number /* int */;
+  missed: number /* int */;
 }
 export interface Signal {
   storyId: number /* int64 */;
   kind: string;
   topic: string;
   title: string;
+  note: string;
   at: string;
+}
+/**
+ * MissedRequest reports a story the reader should have got: its link, and
+ * optionally why it matters to them.
+ */
+export interface MissedRequest {
+  url: string;
+  note: string;
+}
+/**
+ * MissedResponse says why the reader did not get the story. The miss is
+ * recorded either way.
+ */
+export interface MissedResponse {
+  story: Story;
+  /**
+   * Case: not_fetched (no feed had it), not_scored, low_score, queued
+   * (the next brief has it), left_out (its topic was full) or briefed.
+   */
+  case: 'not_fetched' | 'not_scored' | 'low_score' | 'queued' | 'left_out' | 'briefed';
+  lines: string[];
+  /**
+   * AddedFeed was added so stories like this arrive from now on
+   * (not_fetched only); null when none was found.
+   */
+  addedFeed?: AddedFeed;
+}
+export interface AddedFeed {
+  id: number /* int64 */;
+  url: string;
+  title: string;
+  topic: string;
+  /**
+   * HasArticle: the feed carries the reported article.
+   */
+  hasArticle: boolean;
+  perDay: number /* int */;
+}
+export interface MissedList {
+  stories: Story[];
 }
 /**
  * Learning is everything the "what it learned" view shows.

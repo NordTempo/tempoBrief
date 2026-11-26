@@ -75,7 +75,10 @@ type Story struct {
 	Vote    int      `json:"vote"`
 	Clicked bool     `json:"clicked"`
 	Ignored bool     `json:"ignored"`
-	Briefed bool     `json:"briefed"`
+	Missed  bool     `json:"missed"`
+	// MissedNote is the reader's reason, when they reported it as missed.
+	MissedNote string `json:"missedNote"`
+	Briefed    bool   `json:"briefed"`
 }
 
 type StoriesResponse struct {
@@ -197,6 +200,7 @@ type SignalCounts struct {
 	Disliked int `json:"disliked"`
 	Clicked  int `json:"clicked"`
 	Ignored  int `json:"ignored"`
+	Missed   int `json:"missed"`
 }
 
 type Signal struct {
@@ -204,7 +208,42 @@ type Signal struct {
 	Kind    string `json:"kind"`
 	Topic   string `json:"topic"`
 	Title   string `json:"title"`
+	Note    string `json:"note"`
 	At      string `json:"at"`
+}
+
+// MissedRequest reports a story the reader should have got: its link, and
+// optionally why it matters to them.
+type MissedRequest struct {
+	URL  string `json:"url"`
+	Note string `json:"note"`
+}
+
+// MissedResponse says why the reader did not get the story. The miss is
+// recorded either way.
+type MissedResponse struct {
+	Story Story `json:"story"`
+	// Case: not_fetched (no feed had it), not_scored, low_score, queued
+	// (the next brief has it), left_out (its topic was full) or briefed.
+	Case  string   `json:"case" tstype:"'not_fetched' | 'not_scored' | 'low_score' | 'queued' | 'left_out' | 'briefed'"`
+	Lines []string `json:"lines"`
+	// AddedFeed was added so stories like this arrive from now on
+	// (not_fetched only); null when none was found.
+	AddedFeed *AddedFeed `json:"addedFeed"`
+}
+
+type AddedFeed struct {
+	ID    int64  `json:"id"`
+	URL   string `json:"url"`
+	Title string `json:"title"`
+	Topic string `json:"topic"`
+	// HasArticle: the feed carries the reported article.
+	HasArticle bool `json:"hasArticle"`
+	PerDay     int  `json:"perDay"`
+}
+
+type MissedList struct {
+	Stories []Story `json:"stories"`
 }
 
 // Learning is everything the "what it learned" view shows.

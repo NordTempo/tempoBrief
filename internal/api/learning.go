@@ -41,6 +41,7 @@ func (s *Server) learning(w http.ResponseWriter, r *http.Request) {
 	out.Counts = SignalCounts{
 		Liked: counts[store.SignalLiked], Disliked: counts[store.SignalDisliked],
 		Clicked: counts[store.SignalClicked], Ignored: counts[store.SignalIgnored],
+		Missed: counts[store.SignalMissed],
 	}
 	last := s.DB.MetaTime(ctx, "learned_at")
 	out.LastLearnedAt = timeString(last)
@@ -54,7 +55,7 @@ func (s *Server) learning(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, sg := range recent {
-		out.Recent = append(out.Recent, Signal{StoryID: sg.StoryID, Kind: string(sg.Kind), Topic: sg.Topic, Title: sg.Title, At: timeString(sg.At)})
+		out.Recent = append(out.Recent, Signal{StoryID: sg.StoryID, Kind: string(sg.Kind), Topic: sg.Topic, Title: sg.Title, Note: sg.Note, At: timeString(sg.At)})
 	}
 	writeJSON(w, http.StatusOK, out)
 }

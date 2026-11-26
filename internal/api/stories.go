@@ -25,14 +25,14 @@ func storyView(st store.Story) Story {
 		ID: st.ID, Topic: st.Topic, Title: st.Title, URL: st.URL, Summary: st.Summary, Snippet: st.Snippet,
 		Sources: sources, FirstSeen: timeString(st.FirstSeen), Score: st.Score, LLMScore: st.LLMScore,
 		Taste: st.Taste, TasteN: st.TasteN, Reason: st.Reason, Why: pipeline.Why(st), Vote: st.Vote,
-		Clicked: st.Clicked, Ignored: st.Ignored, Briefed: st.BriefedAt != nil,
+		Clicked: st.Clicked, Ignored: st.Ignored, Missed: st.Missed, MissedNote: st.MissedNote, Briefed: st.BriefedAt != nil,
 	}
 }
 
 // publicStory drops what only the reader should see from a story shown to a
 // visitor: their reactions, and the taste parts that would reveal them.
 func publicStory(v Story) Story {
-	v.Vote, v.Clicked, v.Ignored = 0, false, false
+	v.Vote, v.Clicked, v.Ignored, v.Missed, v.MissedNote = 0, false, false, false, ""
 	v.Taste, v.TasteN, v.LLMScore = nil, 0, nil
 	v.Why = v.Reason
 	return v

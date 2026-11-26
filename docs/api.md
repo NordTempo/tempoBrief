@@ -20,6 +20,8 @@ reads also answer without one, minus the reader's reactions
 | `POST /api/v1/briefs/send` `{scheduleId}` | Build and send that brief now |
 | `GET /api/v1/stories?hours=&min=&topic=&q=&voted=&sort=` | Scored stories plus topics. `sort` is `best` (default), `newest` or `outlets` |
 | `PUT /api/v1/stories/{id}/vote` `{vote}` | -1, 0 (clear) or 1; returns the story |
+| `POST /api/v1/missed` `{url, note}` | Report a story the reader should have got; returns why they did not ([learning.md](learning.md#missed)) |
+| `DELETE /api/v1/stories/{id}/missed` | Take a miss back |
 | `GET /api/v1/feeds` · `POST` · `PUT /{id}` · `DELETE /{id}` | Feeds; adding one fetches it at once |
 | `POST /api/v1/feeds/{id}/fetch` | Fetch now |
 | `POST /api/v1/feeds/import` `{opml}` · `GET /api/v1/feeds/export` | OPML in and out |

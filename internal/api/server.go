@@ -94,6 +94,9 @@ func (s *Server) Handler() http.Handler {
 
 	private.HandleFunc("POST /api/v1/briefs/send", s.sendBrief)
 	private.HandleFunc("PUT /api/v1/stories/{id}/vote", s.vote)
+	private.HandleFunc("GET /api/v1/missed", s.missedList)
+	private.HandleFunc("POST /api/v1/missed", s.reportMissed)
+	private.HandleFunc("DELETE /api/v1/stories/{id}/missed", s.clearMissed)
 
 	private.HandleFunc("GET /api/v1/feeds", s.feeds)
 	private.HandleFunc("POST /api/v1/feeds", s.addFeed)

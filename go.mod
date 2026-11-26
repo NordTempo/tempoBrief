@@ -8,6 +8,7 @@ require (
 	github.com/knights-analytics/hugot v0.9.0
 	github.com/mmcdole/gofeed v1.5.0
 	golang.org/x/crypto v0.59.0
+	golang.org/x/net v0.63.0
 	modernc.org/sqlite v1.61.0
 )
 
@@ -60,7 +61,6 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20231108232855-2478ac86f678 // indirect
 	golang.org/x/image v0.48.0 // indirect
 	golang.org/x/mod v0.43.0 // indirect
-	golang.org/x/net v0.63.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect

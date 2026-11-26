@@ -11,24 +11,26 @@ import (
 
 // Story is one event and everything tempoBrief knows about it.
 type Story struct {
-	ID        int64
-	Topic     string
-	Title     string
-	URL       string
-	Snippet   string
-	NItems    int
-	FirstSeen time.Time
-	LastSeen  time.Time
-	LLMScore  *int64
-	Taste     *float64
-	TasteN    int
-	Score     *float64
-	Summary   string
-	Reason    string
-	BriefedAt *int64
-	Vote      int // -1, 0 (none) or 1
-	Clicked   bool
-	Ignored   bool
+	ID         int64
+	Topic      string
+	Title      string
+	URL        string
+	Snippet    string
+	NItems     int
+	FirstSeen  time.Time
+	LastSeen   time.Time
+	LLMScore   *int64
+	Taste      *float64
+	TasteN     int
+	Score      *float64
+	Summary    string
+	Reason     string
+	BriefedAt  *int64
+	Vote       int // -1, 0 (none) or 1
+	Clicked    bool
+	Ignored    bool
+	Missed     bool   // the reader reported it as missed
+	MissedNote string // their reason, if they gave one
 	// Sources are the distinct outlets that carried the story, first one first.
 	Sources []string
 }
@@ -36,6 +38,7 @@ type Story struct {
 const storyColumns = `s.id, s.topic, s.title, s.url, s.snippet, s.n_items, s.first_seen, s.last_seen,
 	s.llm_score, s.taste, COALESCE(s.taste_n, 0), s.score, COALESCE(s.summary, ''), COALESCE(s.reason, ''),
 	s.briefed_at, COALESCE(s.vote, 0), s.clicked_at IS NOT NULL, s.ignored_at IS NOT NULL,
+	s.missed_at IS NOT NULL, COALESCE(s.missed_note, ''),
 	(SELECT json_group_array(source) FROM (SELECT source FROM items WHERE story_id = s.id GROUP BY source ORDER BY MIN(id)))`
 
 func (s *Store) queryStories(ctx context.Context, where string, args ...any) ([]Story, error) {
@@ -53,7 +56,7 @@ func (s *Store) queryStories(ctx context.Context, where string, args ...any) ([]
 		var sources string
 		if err := rows.Scan(&st.ID, &st.Topic, &st.Title, &st.URL, &st.Snippet, &st.NItems, &first, &last,
 			&llm, &taste, &st.TasteN, &score, &st.Summary, &st.Reason, &briefed, &st.Vote, &st.Clicked, &st.Ignored,
-			&sources); err != nil {
+			&st.Missed, &st.MissedNote, &sources); err != nil {
 			return nil, err
 		}
 		st.FirstSeen, st.LastSeen = time.Unix(first, 0), time.Unix(last, 0)
@@ -109,7 +112,7 @@ type StoryFilter struct {
 	MinScore float64
 	Topic    string
 	Query    string
-	Voted    bool // only stories with a vote
+	Voted    bool   // only stories with a vote
 	Sort     string // SortBest (default), SortNewest or SortOutlets
 	Limit    int
 }
@@ -327,6 +330,7 @@ type Signal struct {
 	Title   string
 	Summary string
 	Kind    SignalKind
+	Note    string // the reader's words, for missed stories
 	At      time.Time
 	Vector  []float32
 }
@@ -338,22 +342,28 @@ const (
 	SignalDisliked SignalKind = "disliked"
 	SignalClicked  SignalKind = "clicked" // opened, no vote
 	SignalIgnored  SignalKind = "ignored" // delivered, neither opened nor voted
+	SignalMissed   SignalKind = "missed"  // reported: should have reached the reader
 )
 
-// Signals returns reactions since the given time, newest first. A vote wins
-// over a click, and a click over an ignore.
+// signalKind and signalAt are SQL for a story's strongest reaction and its
+// time. A miss wins over a vote, a vote over a click, a click over an ignore.
+const (
+	signalKind = `CASE WHEN missed_at IS NOT NULL THEN 'missed' WHEN vote = 1 THEN 'liked' WHEN vote = -1 THEN 'disliked'
+		     WHEN clicked_at IS NOT NULL THEN 'clicked' ELSE 'ignored' END`
+	signalAt = "COALESCE(missed_at, voted_at, clicked_at, ignored_at)"
+)
+
+// Signals returns reactions since the given time, newest first, one per
+// story (see signalKind).
 func (s *Store) Signals(ctx context.Context, since time.Time, limit int, withVectors bool) ([]Signal, error) {
 	vec := "NULL"
 	if withVectors {
 		vec = "centroid"
 	}
 	rows, err := s.DB.QueryContext(ctx, `SELECT id, topic, title, COALESCE(summary, ''),
-		CASE WHEN vote = 1 THEN 'liked' WHEN vote = -1 THEN 'disliked'
-		     WHEN clicked_at IS NOT NULL THEN 'clicked' ELSE 'ignored' END,
-		COALESCE(voted_at, clicked_at, ignored_at), `+vec+`
-		FROM stories
-		WHERE COALESCE(voted_at, clicked_at, ignored_at) >= ?
-		ORDER BY COALESCE(voted_at, clicked_at, ignored_at) DESC LIMIT ?`, since.Unix(), limit)
+		`+signalKind+`, COALESCE(missed_note, ''), `+signalAt+`, `+vec+`
+		FROM stories WHERE `+signalAt+` >= ?
+		ORDER BY `+signalAt+` DESC LIMIT ?`, since.Unix(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +373,7 @@ func (s *Store) Signals(ctx context.Context, since time.Time, limit int, withVec
 		var sg Signal
 		var at int64
 		var b []byte
-		if err := rows.Scan(&sg.StoryID, &sg.Topic, &sg.Title, &sg.Summary, &sg.Kind, &at, &b); err != nil {
+		if err := rows.Scan(&sg.StoryID, &sg.Topic, &sg.Title, &sg.Summary, &sg.Kind, &sg.Note, &at, &b); err != nil {
 			return nil, err
 		}
 		sg.At = time.Unix(at, 0)
@@ -375,10 +385,12 @@ func (s *Store) Signals(ctx context.Context, since time.Time, limit int, withVec
 	return out, rows.Err()
 }
 
-// CountSignals counts reactions since the given time.
+// CountSignals counts reactions since the given time. A miss counts as three:
+// the reader went out of their way to report it.
 func (s *Store) CountSignals(ctx context.Context, since time.Time) (int, error) {
 	var n int
-	err := s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM stories WHERE COALESCE(voted_at, clicked_at, ignored_at) >= ?", since.Unix()).Scan(&n)
+	err := s.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(CASE WHEN missed_at IS NOT NULL THEN 3 ELSE 1 END), 0)
+		FROM stories WHERE `+signalAt+` >= ?`, since.Unix()).Scan(&n)
 	return n, err
 }
 
@@ -412,7 +424,7 @@ func (s *Store) RecordClick(ctx context.Context, id int64) (string, error) {
 func (s *Store) MarkIgnored(ctx context.Context, deliveredBefore time.Time) (int, error) {
 	res, err := s.DB.ExecContext(ctx, `UPDATE stories SET ignored_at = ?
 		WHERE briefed_at IS NOT NULL AND briefed_at < ? AND briefed_at >= ?
-		AND vote IS NULL AND clicked_at IS NULL AND ignored_at IS NULL`,
+		AND vote IS NULL AND clicked_at IS NULL AND ignored_at IS NULL AND missed_at IS NULL`,
 		s.unix(), deliveredBefore.Unix(), deliveredBefore.Add(-7*24*time.Hour).Unix())
 	if err != nil {
 		return 0, err
@@ -491,7 +503,7 @@ func (s *Store) markStories(ctx context.Context, column string, ids []int64) err
 // with a reaction, which the learner keeps using.
 func (s *Store) Prune(ctx context.Context, before time.Time) (int64, error) {
 	res, err := s.DB.ExecContext(ctx, `DELETE FROM stories WHERE last_seen < ?
-		AND vote IS NULL AND clicked_at IS NULL AND ignored_at IS NULL`, before.Unix())
+		AND vote IS NULL AND clicked_at IS NULL AND ignored_at IS NULL AND missed_at IS NULL`, before.Unix())
 	if err != nil {
 		return 0, err
 	}
@@ -505,10 +517,8 @@ func (s *Store) Prune(ctx context.Context, before time.Time) (int64, error) {
 
 // SignalCounts counts reactions since the given time, by kind.
 func (s *Store) SignalCounts(ctx context.Context, since time.Time) (map[SignalKind]int, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT
-		CASE WHEN vote = 1 THEN 'liked' WHEN vote = -1 THEN 'disliked'
-		     WHEN clicked_at IS NOT NULL THEN 'clicked' ELSE 'ignored' END AS kind, COUNT(*)
-		FROM stories WHERE COALESCE(voted_at, clicked_at, ignored_at) >= ? GROUP BY kind`, since.Unix())
+	rows, err := s.DB.QueryContext(ctx, `SELECT `+signalKind+` AS kind, COUNT(*)
+		FROM stories WHERE `+signalAt+` >= ? GROUP BY kind`, since.Unix())
 	if err != nil {
 		return nil, err
 	}

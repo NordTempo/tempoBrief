@@ -264,6 +264,7 @@ func (p *Pipeline) scoringPrompt(ctx context.Context, s settings.Settings) (stri
 		return "", err
 	}
 	liked, disliked := examples(signals, store.SignalLiked), examples(signals, store.SignalDisliked)
+	missed := examples(signals, store.SignalMissed)
 
 	return fmt.Sprintf(`You pick the news one specific reader wants to see. Each user message lists
 candidate stories, one per line: id, topic, how many outlets covered it, title,
@@ -290,6 +291,14 @@ Recent votes, the most direct evidence of taste:
 %s
 </disliked>
 
+Stories the reader found elsewhere and reported as missed: they wanted these
+and did not get them, so similar stories deserve 7 or more. Their own words
+follow "reader:" where given.
+
+<missed>
+%s
+</missed>
+
 Return one entry per story:
 - score, 0 to 10: how much this reader would want to see it today.
   9-10 they would be annoyed to miss it, 7-8 clearly worth their time,
@@ -304,14 +313,18 @@ Return one entry per story:
   themselves; otherwise 0. The same event means the same incident, release,
   announcement or study, also when written in another language or from
   another angle. A different event on the same topic is not the same.`,
-		strings.TrimSpace(s.Interests), policy, liked, disliked, s.Language, s.Language), nil
+		strings.TrimSpace(s.Interests), policy, liked, disliked, missed, s.Language, s.Language), nil
 }
 
 func examples(signals []store.Signal, kind store.SignalKind) string {
 	var lines []string
 	for _, sg := range signals {
 		if sg.Kind == kind {
-			lines = append(lines, fmt.Sprintf("- [%s] %s", sg.Topic, sg.Title))
+			line := fmt.Sprintf("- [%s] %s", sg.Topic, sg.Title)
+			if sg.Note != "" {
+				line += " | reader: " + sg.Note
+			}
+			lines = append(lines, line)
 			if len(lines) == promptExamples {
 				break
 			}

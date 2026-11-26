@@ -26,12 +26,16 @@ const maxBody = 10 << 20
 type Fetcher struct {
 	http      *http.Client
 	userAgent string
+	// NewsSearch is Google News' base URL, for sites without a feed (see
+	// Discover). Empty turns that fallback off, as tests do.
+	NewsSearch string
 }
 
 func NewFetcher(version string) *Fetcher {
 	return &Fetcher{
-		http:      &http.Client{Timeout: 30 * time.Second},
-		userAgent: "tempoBrief/" + version + " (+https://github.com/NordTempo/tempoBrief)",
+		http:       &http.Client{Timeout: 30 * time.Second},
+		userAgent:  "tempoBrief/" + version + " (+https://github.com/NordTempo/tempoBrief)",
+		NewsSearch: "https://news.google.com",
 	}
 }
 

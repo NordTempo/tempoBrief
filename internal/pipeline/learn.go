@@ -1,9 +1,11 @@
 package pipeline
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -77,11 +79,18 @@ func (p *Pipeline) learn(ctx context.Context, s settings.Settings) (store.Policy
 		return store.Policy{}, err
 	}
 
+	// Misses first: they are the clearest statement of what the policy lacks.
+	slices.SortStableFunc(signals, func(a, b store.Signal) int {
+		return cmp.Compare(boolInt(b.Kind == store.SignalMissed), boolInt(a.Kind == store.SignalMissed))
+	})
 	var lines []string
 	for _, sg := range signals {
 		line := fmt.Sprintf("- %s [%s] %s", sg.Kind, sg.Topic, sg.Title)
 		if sg.Summary != "" {
 			line += " | " + sg.Summary
+		}
+		if sg.Note != "" {
+			line += " | reader: " + sg.Note
 		}
 		lines = append(lines, line)
 	}
@@ -97,8 +106,11 @@ their interests, and rates every incoming story with it.
 %s
 </current_policy>
 
-The user message lists the reader's recent reactions, newest first. "liked" and
-"disliked" are explicit votes and count most. "clicked" means they opened it
+The user message lists the reader's recent reactions, misses first, then
+newest first. "missed" means the reader found the story elsewhere and reported
+that they should have got it: the strongest evidence of all, and a gap in the
+current policy. Their own words follow "reader:" where given. "liked" and
+"disliked" are explicit votes and count next most. "clicked" means they opened it
 without voting, a mild positive. "ignored" means it was delivered and they
 neither opened nor voted, a weak negative: one ignore says little, a pattern of
 them says a lot.
@@ -129,4 +141,11 @@ reader reacted. Rules:
 	policy.ID, policy.CreatedAt = id, p.Now()
 	p.Log.Info("policy learned", "signals", len(signals), "changes", len(answer.Changes))
 	return policy, p.DB.SetMetaTime(ctx, "learned_at", p.Now())
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

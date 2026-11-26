@@ -10,6 +10,7 @@ import { Brief } from "./views/Brief";
 import { Feeds } from "./views/Feeds";
 import { Learning } from "./views/Learning";
 import { Login } from "./views/Login";
+import { Missed } from "./views/Missed";
 import { Settings } from "./views/Settings";
 import { Stories } from "./views/Stories";
 
@@ -64,6 +65,7 @@ export function App() {
 						/>
 						<Route path="/stories" component={() => <Stories signedIn />} />
 						<Route path="/learning" component={Learning} />
+						<Route path="/missed" component={Missed} />
 						<Route path="/feeds" component={Feeds} />
 						<Route path="/settings" component={() => <Settings me={user} />} />
 						<Route path="/login" component={GoHome} />

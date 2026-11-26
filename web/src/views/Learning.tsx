@@ -22,6 +22,7 @@ function rules(text: string): string[] {
 }
 
 const KIND = {
+	missed: { mark: "!", class: "text-warn", label: "missed" },
 	liked: { mark: "▲", class: "text-good", label: "liked" },
 	disliked: { mark: "▼", class: "text-bad", label: "passed on" },
 	clicked: { mark: "↗", class: "text-secondary", label: "opened" },
@@ -128,10 +129,7 @@ export function Learning() {
 						</LinkButton>
 					)}
 					<LinkButton
-						disabled={
-							busy.value ||
-							l.counts.liked + l.counts.disliked + l.counts.clicked + l.counts.ignored === 0
-						}
+						disabled={busy.value || Object.values(l.counts).every((n) => n === 0)}
 						onClick={relearn}
 					>
 						{busy.value ? "Learning" : "Relearn now"}
@@ -154,6 +152,7 @@ export function Learning() {
 			)}
 
 			<p class="mt-6 text-label text-muted">
+				{c.missed > 0 && `${c.missed} missed · `}
 				{c.liked} liked · {c.disliked} passed on · {c.clicked} opened · {c.ignored} ignored, last 60
 				days. {toNext > 0 ? `Next rewrite after ${toNext} more.` : "Rewrites at the next check."}
 			</p>
@@ -169,7 +168,10 @@ export function Learning() {
 									<span class={`w-4 shrink-0 text-center ${k.class}`} title={k.label}>
 										{k.mark}
 									</span>
-									<span class="min-w-0 flex-1">{r.title}</span>
+									<span class="min-w-0 flex-1">
+										{r.title}
+										{r.note && <span class="block text-label text-muted">{r.note}</span>}
+									</span>
 									<span class="shrink-0 text-label text-faint">{r.topic}</span>
 								</li>
 							);
