@@ -38,7 +38,7 @@ func publicStory(v Story) Story {
 	return v
 }
 
-// GET /api/v1/stories?hours=24&min=0&topic=&q=&voted=true
+// GET /api/v1/stories?hours=24&min=0&topic=&q=&voted=true&sort=best|newest|outlets
 func (s *Server) stories(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	hours, err := strconv.Atoi(q.Get("hours"))
@@ -50,7 +50,7 @@ func (s *Server) stories(w http.ResponseWriter, r *http.Request) {
 	public := s.public(r)
 	list, err := s.DB.ListStories(r.Context(), store.StoryFilter{
 		Since: since, MinScore: minScore, Topic: q.Get("topic"), Query: q.Get("q"),
-		Voted: q.Get("voted") == "true" && !public,
+		Voted: q.Get("voted") == "true" && !public, Sort: q.Get("sort"),
 	})
 	if err != nil {
 		s.internal(w, err)

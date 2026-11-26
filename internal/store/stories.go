@@ -110,10 +110,24 @@ type StoryFilter struct {
 	Topic    string
 	Query    string
 	Voted    bool // only stories with a vote
+	Sort     string // SortBest (default), SortNewest or SortOutlets
 	Limit    int
 }
 
-// ListStories returns scored stories, best first.
+// Story list orders. Ties fall back to the best story first.
+const (
+	SortBest    = "best"
+	SortNewest  = "newest"
+	SortOutlets = "outlets"
+)
+
+var storyOrder = map[string]string{
+	SortBest:    "s.score DESC, s.n_items DESC, s.first_seen DESC",
+	SortNewest:  "s.first_seen DESC, s.score DESC",
+	SortOutlets: "(SELECT COUNT(DISTINCT source) FROM items WHERE story_id = s.id) DESC, s.score DESC",
+}
+
+// ListStories returns scored stories in the filter's order.
 func (s *Store) ListStories(ctx context.Context, f StoryFilter) ([]Story, error) {
 	// n_items is 0 once a story was merged into another.
 	where := []string{"s.first_seen >= ?", "s.score IS NOT NULL", "s.score >= ?", "s.n_items > 0"}
@@ -134,8 +148,12 @@ func (s *Store) ListStories(ctx context.Context, f StoryFilter) ([]Story, error)
 	if limit <= 0 || limit > 500 {
 		limit = 200
 	}
+	order, ok := storyOrder[f.Sort]
+	if !ok {
+		order = storyOrder[SortBest]
+	}
 	args = append(args, limit)
-	return s.queryStories(ctx, strings.Join(where, " AND ")+" ORDER BY s.score DESC, s.n_items DESC, s.first_seen DESC LIMIT ?", args...)
+	return s.queryStories(ctx, strings.Join(where, " AND ")+" ORDER BY "+order+" LIMIT ?", args...)
 }
 
 // Topics lists topics that have stories since the given time, for filters.
