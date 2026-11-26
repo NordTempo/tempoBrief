@@ -229,8 +229,8 @@ func (p *Pipeline) diagnose(s settings.Settings, st store.Story) (MissedCase, []
 	case p.Now().Sub(st.FirstSeen) < briefWindow:
 		c, lines = MissedQueued, []string{fmt.Sprintf("Scored %s, so it is in line for the next %s.", score, strings.ToLower(brief.Name))}
 	default:
-		c, lines = MissedLeftOut, []string{fmt.Sprintf("Scored %s but was left out: a brief takes at most %d stories per topic, and %s had higher scorers.",
-			score, brief.MaxPerTopic, st.Topic)}
+		c, lines = MissedLeftOut, []string{fmt.Sprintf("Scored %s but was left out: the %s takes the %d best stories, and that many scored higher.",
+			score, strings.ToLower(brief.Name), brief.MaxStories)}
 	}
 
 	a := s.Alerts

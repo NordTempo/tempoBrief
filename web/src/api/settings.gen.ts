@@ -73,7 +73,11 @@ export interface BriefSchedule {
   time: string; // HH:MM local
   days: number /* int */[]; // ISO weekdays, 1 = Monday; empty means every day
   minScore: number /* int */;
-  maxPerTopic: number /* int */;
+  /**
+   * MaxStories caps the whole brief: its best stories, from any topic.
+   * Nothing is added to fill it.
+   */
+  maxStories: number /* int */;
   /**
    * Channels the brief goes to, by channel ID. Empty means every channel
    * with briefs enabled.

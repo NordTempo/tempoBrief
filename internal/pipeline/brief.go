@@ -89,13 +89,14 @@ func (p *Pipeline) sendBrief(ctx context.Context, s settings.Settings, b setting
 	if err != nil {
 		return 0, err
 	}
-	// Over-fetch per topic so there is room left after removing duplicates.
-	perTopic := capPerTopic(candidates, b.MaxPerTopic*2)
-	kept, dropped := perTopic, []int64(nil)
+	// The best stories from any topic, nothing added to fill a topic. Twice
+	// the cap go to the duplicate merge, so there is room left after it.
+	best := candidates[:min(len(candidates), b.MaxStories*2)]
+	kept, dropped := best, []int64(nil)
 	if model, err := p.model(s); err == nil {
-		kept, dropped = p.mergeDuplicates(ctx, model, perTopic)
+		kept, dropped = p.mergeDuplicates(ctx, model, best)
 	}
-	sections := sections(capPerTopic(kept, b.MaxPerTopic))
+	sections := sections(kept[:min(len(kept), b.MaxStories)])
 	title := fmt.Sprintf("%s · %s", b.Name, now.In(s.Location()).Format("Monday 2 January"))
 
 	var ids []int64
@@ -170,19 +171,6 @@ func (p *Pipeline) alerts(ctx context.Context, s settings.Settings) error {
 type section struct {
 	topic   string
 	stories []store.Story
-}
-
-// capPerTopic keeps at most n stories per topic, preserving order.
-func capPerTopic(list []store.Story, n int) []store.Story {
-	count := map[string]int{}
-	var out []store.Story
-	for _, st := range list {
-		if count[st.Topic] < n {
-			count[st.Topic]++
-			out = append(out, st)
-		}
-	}
-	return out
 }
 
 // sections groups stories by topic; topics are ordered by their best story.

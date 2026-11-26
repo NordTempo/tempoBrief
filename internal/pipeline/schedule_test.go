@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -74,12 +75,8 @@ func TestSectionsOrderTopicsByBestStory(t *testing.T) {
 		{ID: 3, Topic: "Tech", Score: score(7)},
 		{ID: 4, Topic: "Tech", Score: score(6)},
 	}
-	capped := capPerTopic(list, 2)
-	if len(capped) != 3 {
-		t.Fatalf("want 3 after capping Tech at 2, got %d", len(capped))
-	}
-	secs := sections(capped)
-	if secs[0].topic != "Tech" || len(secs[0].stories) != 2 || secs[1].topic != "Norway" {
+	secs := sections(list)
+	if len(secs) != 2 || secs[0].topic != "Tech" || len(secs[0].stories) != 3 || secs[1].topic != "Norway" {
 		t.Fatalf("unexpected sections %+v", secs)
 	}
 }
@@ -90,5 +87,31 @@ func TestEmbedTextGivesShortTitlesContext(t *testing.T) {
 	}
 	if got := embedText(store.PendingItem{Title: "Norges Bank holder renten uendret", Source: "NRK"}); got != "Norges Bank holder renten uendret" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// The cap is on the whole brief: its best stories, whatever their topic.
+func TestBriefTakesTheBestStoriesFromAnyTopic(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t)
+	h.p.Tick(ctx) // the rate story and Claude score 8, football 3
+	s, _ := settings.Load(ctx, h.db)
+	s.Briefs[0].MaxStories, s.Briefs[0].MinScore = 1, 0
+	if err := settings.Save(ctx, h.db, s); err != nil {
+		t.Fatal(err)
+	}
+	id, err := h.p.SendBriefNow(ctx, "morning")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := h.db.Brief(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b.StoryIDs) != 1 {
+		t.Fatalf("want 1 story, got %d", len(b.StoryIDs))
+	}
+	if st, _ := h.db.Story(ctx, b.StoryIDs[0]); st.Score == nil || *st.Score < 8 {
+		t.Fatalf("want one of the best stories, got %+v", st)
 	}
 }

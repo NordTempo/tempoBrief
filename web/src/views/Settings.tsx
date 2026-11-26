@@ -242,7 +242,7 @@ export function Settings({ me }: { me: Me }) {
 									time: "18:00",
 									days: [],
 									minScore: 6,
-									maxPerTopic: 6,
+									maxStories: 10,
 									channels: [],
 								});
 							})
@@ -560,15 +560,16 @@ function BriefEditor({
 					}
 				/>
 				<NumberField
-					label="Stories per topic"
+					label="Stories at most"
 					min={1}
 					max={50}
-					value={brief.maxPerTopic}
+					value={brief.maxStories}
 					onInput={(v) =>
 						onChange((b) => {
-							b.maxPerTopic = v;
+							b.maxStories = v;
 						})
 					}
+					hint="The best ones, from any topic."
 				/>
 			</div>
 			<ChannelPicker

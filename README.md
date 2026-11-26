@@ -36,8 +36,8 @@ feeds ──fetch──▶ items ──embed + group──▶ stories ──scor
    the learned policy, writes a one-line summary in your language and says why.
    A **taste** adjustment then moves the score up to 1.5 points based on how
    you reacted to the most similar past stories.
-4. **Brief.** At each scheduled time, the best unsent stories per topic, with
-   same-event duplicates removed.
+4. **Brief.** At each scheduled time, the best unsent stories above your bar,
+   from any topic, up to a maximum, with same-event duplicates removed.
 5. **Learn.** Every few days, after enough new reactions, the model rewrites the
    editorial policy from them. You see what changed and why.
 

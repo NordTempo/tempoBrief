@@ -88,13 +88,15 @@ The final score is the model's score plus the taste adjustment, clamped to 0 to
 ## Briefs
 
 A brief schedule has a name, a local time, optional weekdays, a minimum score, a
-cap per topic and channels. It is due when its time has passed today by less
+maximum number of stories (default 10) and channels. It is due when its time has passed today by less
 than 3 hours, no brief of that schedule went out since, and tempoBrief was
 installed before the slot (a fresh install never sends an empty brief).
 
 Candidates: scored stories first seen in the last 24 hours, never briefed, at or
-above the minimum. Twice the cap per topic go to the duplicate merge, then the
-cap applies. Topics are ordered by their best story. The brief is stored before
+above the minimum, best first. The best twice-the-maximum go to the duplicate
+merge, then the maximum applies, whatever the topics. Nothing fills a topic or
+the brief: a quiet day sends fewer stories. Topics are ordered by their best
+story. The brief is stored before
 delivery, so the web app and Home Assistant show it even if a channel fails.
 
 Alerts: stories first seen in the last 6 hours, at or above the alert score,

@@ -69,13 +69,15 @@ type Provider struct {
 
 // BriefSchedule is one recurring brief, such as the morning brief.
 type BriefSchedule struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Enabled     bool   `json:"enabled"`
-	Time        string `json:"time"` // HH:MM local
-	Days        []int  `json:"days"` // ISO weekdays, 1 = Monday; empty means every day
-	MinScore    int    `json:"minScore"`
-	MaxPerTopic int    `json:"maxPerTopic"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Enabled  bool   `json:"enabled"`
+	Time     string `json:"time"` // HH:MM local
+	Days     []int  `json:"days"` // ISO weekdays, 1 = Monday; empty means every day
+	MinScore int    `json:"minScore"`
+	// MaxStories caps the whole brief: its best stories, from any topic.
+	// Nothing is added to fill it.
+	MaxStories int `json:"maxStories"`
 	// Channels the brief goes to, by channel ID. Empty means every channel
 	// with briefs enabled.
 	Channels []string `json:"channels"`
@@ -150,12 +152,14 @@ func Default() Settings {
 		Provider: Provider{Kind: ProviderAnthropic},
 		Briefs: []BriefSchedule{{
 			ID: "morning", Name: "Morning brief", Enabled: true, Time: "07:00",
-			MinScore: 6, MaxPerTopic: 6,
+			MinScore: 6, MaxStories: defaultMaxStories,
 		}},
 		Alerts:   Alerts{Enabled: false, MinScore: 9, MinSources: 2},
 		Learning: Learning{Policy: true, Taste: true, IgnoreAfterHours: 48},
 	}
 }
+
+const defaultMaxStories = 10
 
 // Load reads settings, creating defaults (with fresh tokens) on first start.
 func Load(ctx context.Context, db *store.Store) (Settings, error) {
@@ -187,6 +191,9 @@ func (s Settings) normalized() Settings {
 		}
 		if s.Briefs[i].Channels == nil {
 			s.Briefs[i].Channels = []string{}
+		}
+		if s.Briefs[i].MaxStories == 0 { // saved before the cap was per brief
+			s.Briefs[i].MaxStories = defaultMaxStories
 		}
 	}
 	return s
@@ -282,8 +289,8 @@ func (s Settings) Validate() error {
 		if b.MinScore < 0 || b.MinScore > 10 {
 			fail("%s: minimum score must be 0 to 10", where)
 		}
-		if b.MaxPerTopic < 1 || b.MaxPerTopic > 50 {
-			fail("%s: stories per topic must be 1 to 50", where)
+		if b.MaxStories < 1 || b.MaxStories > 50 {
+			fail("%s: stories at most must be 1 to 50", where)
 		}
 		for _, id := range b.Channels {
 			if !channelIDs[id] {
