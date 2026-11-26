@@ -27,6 +27,8 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 FROM node:24-bookworm-slim AS cli
 RUN npm install -g @anthropic-ai/claude-code @openai/codex && npm cache clean --force \
  && useradd --uid 65532 --create-home --home-dir /home/nonroot nonroot
+# Debian slim has no CA certificates (Node brings its own); Go needs them for HTTPS.
+COPY --from=go /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=go /out/tempobrief /usr/local/bin/tempobrief
 COPY --from=go --chown=65532:65532 /out/data /data
 USER 65532
