@@ -78,7 +78,7 @@ func TestEveryVoteClickGetsAnAnswer(t *testing.T) {
 		{TestStoryID, "u1", "u1", "The buttons work."},
 		{404, "u1", "", "no longer in tempoBrief"},
 	} {
-		r := h.answerVote(c.id, 1, c.user, c.owner)
+		r := h.answerVote(c.id, 1, c.user, c.owner, nil)
 		if r == nil || r.Data == nil {
 			t.Fatalf("story %d: no answer", c.id)
 		}

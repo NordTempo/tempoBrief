@@ -2,11 +2,11 @@
 
 A channel is one destination with its own kind and settings. Brief schedules and
 alerts list the channels they go to; an empty list means every enabled channel.
-"Test" in Settings sends a sample alert to one channel.
+"Send a test" in Settings sends a sample brief of one story to one channel.
 
 | Kind | Brief | Alert | Votes |
 |---|---|---|---|
-| Discord | Header, a heading per topic, one message per story | One message per story | 👍 👎 buttons on every story, optionally owner only |
+| Discord | As few messages as fit: about 10 stories each, each with its own vote row | One message per story | 👍 👎 buttons on every story, optionally owner only |
 | Email (SMTP) | One HTML + text email | One email per story | 👍 👎 links (open a confirm page) |
 | ntfy | One notification listing stories; tap opens the brief | One notification per story | 👍 👎 action buttons |
 | Webhook | `POST` JSON (`WebhookPayload`) | Same, `kind: "alert"` | None |
@@ -31,7 +31,13 @@ Settings walks through four steps, and the token is the only thing copied:
 4. **Pick the channel** from the text and announcement channels of every
    server the bot is in, grouped by server.
 
-"Send a test" then posts a sample story with vote buttons.
+"Send a test" then posts a sample brief with vote buttons.
+
+Briefs use Discord's components layout (`IS_COMPONENTS_V2`): per story a
+text block (with the topic heading when it opens a topic) and a 👍 👎 row,
+4 components. A message holds 40 components and 4000 characters, so a brief
+packs about 9 stories into its first message and 10 into each after; a topic
+that continues repeats its heading. A vote updates only that story's row.
 
 ## Links
 

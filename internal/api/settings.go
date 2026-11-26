@@ -90,7 +90,8 @@ func (s *Server) testProvider(w http.ResponseWriter, r *http.Request) {
 		" in " + time.Since(started).Round(100*time.Millisecond).String()})
 }
 
-// testChannel sends a sample alert to one saved channel.
+// testChannel sends a sample brief of one story to one saved channel, so a
+// Discord test shows the brief layout with its vote buttons.
 func (s *Server) testChannel(w http.ResponseWriter, r *http.Request) {
 	var body TestChannelRequest
 	if !readJSON(w, r, &body) {
@@ -105,7 +106,7 @@ func (s *Server) testChannel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "save the channel first")
 		return
 	}
-	msg := deliver.Message{Kind: deliver.KindAlert, Title: "tempoBrief test", Sections: []deliver.Section{{
+	msg := deliver.Message{Kind: deliver.KindBrief, Title: "tempoBrief test", Sections: []deliver.Section{{
 		Topic: "Test", Stories: []deliver.Story{{
 			ID: deliver.TestStoryID, Title: "tempoBrief can reach this channel", Summary: "This is a test message from Settings.",
 			URL: "https://github.com/NordTempo/tempoBrief", Score: 10, Sources: []string{"tempoBrief"},

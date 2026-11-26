@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -101,13 +102,19 @@ func (h *discordHub) onInteraction(s *discordgo.Session, i *discordgo.Interactio
 	}
 	id, _ := strconv.ParseInt(m[1], 10, 64)
 	vote, _ := strconv.Atoi(m[2])
-	s.InteractionRespond(i.Interaction, h.answerVote(id, vote, userID, owner))
+	var layout []discordgo.MessageComponent
+	if i.Message != nil {
+		layout = i.Message.Components
+	}
+	s.InteractionRespond(i.Interaction, h.answerVote(id, vote, userID, owner, layout))
 }
 
 // answerVote records a vote from a button and says what Discord shows. It
 // always answers: without one, Discord tells the reader the app did not
-// respond. Notes only the voter sees are ephemeral.
-func (h *discordHub) answerVote(id int64, vote int, userID, owner string) *discordgo.InteractionResponse {
+// respond. Notes only the voter sees are ephemeral. layout is the clicked
+// message's components; a brief message holds many stories, so only this
+// story's buttons change.
+func (h *discordHub) answerVote(id int64, vote int, userID, owner string, layout []discordgo.MessageComponent) *discordgo.InteractionResponse {
 	note := func(text string) *discordgo.InteractionResponse {
 		return &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -129,7 +136,7 @@ func (h *discordHub) answerVote(id int64, vote int, userID, owner string) *disco
 	}
 	return &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{Components: voteRow(id, vote)},
+		Data: &discordgo.InteractionResponseData{Components: markVote(layout, id, vote)},
 	}
 }
 
@@ -156,6 +163,28 @@ func (h *discordHub) send(ctx context.Context, c settings.Channel, m Message) er
 		}
 		return nil
 	}
+	for _, layout := range briefMessages(m) {
+		msg := &discordgo.MessageSend{Components: layout, Flags: discordgo.MessageFlagsIsComponentsV2}
+		if _, err := s.ChannelMessageSendComplex(c.DiscordChannelID, msg, discordgo.WithContext(ctx)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Discord's limits for one message in its components layout: 40 components,
+// counting the ones inside rows, and 4000 characters of text.
+const (
+	discordMaxComponents = 40
+	discordMaxText       = 4000
+)
+
+// briefMessages lays a brief out in as few messages as Discord allows. Each
+// story is a text block with its topic heading when it opens a topic, then
+// its own 👍 👎 row: 4 components, so about 9 stories go in the first
+// message and 10 in each one after. A topic that continues in the next
+// message repeats its heading.
+func briefMessages(m Message) [][]discordgo.MessageComponent {
 	header := "## " + m.Title
 	if m.BriefURL != "" {
 		header += fmt.Sprintf("\n-# [Open in tempoBrief](<%s>)", m.BriefURL)
@@ -163,20 +192,44 @@ func (h *discordHub) send(ctx context.Context, c settings.Channel, m Message) er
 	if len(m.Sections) == 0 {
 		header += "\nNothing cleared the bar today."
 	}
-	if err := post(header, nil); err != nil {
-		return err
-	}
+	var out [][]discordgo.MessageComponent
+	cur := []discordgo.MessageComponent{discordgo.TextDisplay{Content: header}}
+	count, chars := 1, len(header)
 	for _, sec := range m.Sections {
-		if err := post("### "+sec.Topic, nil); err != nil {
-			return err
+		for i, st := range sec.Stories {
+			text := formatDiscordStory(st)
+			if count+4 > discordMaxComponents || chars+len(text)+len(sec.Topic)+5 > discordMaxText {
+				out = append(out, cur)
+				cur, count, chars = nil, 0, 0
+			}
+			if i == 0 || len(cur) == 0 {
+				text = "### " + sec.Topic + "\n" + text
+			}
+			cur = append(cur, discordgo.TextDisplay{Content: text})
+			cur = append(cur, voteRow(st.ID, st.Vote)...)
+			count, chars = count+4, chars+len(text)
 		}
-		for _, st := range sec.Stories {
-			if err := post(formatDiscordStory(st), &st); err != nil {
-				return err
+	}
+	return append(out, cur)
+}
+
+// markVote returns a message's components with one story's 👍 👎 showing
+// vote. It works on brief messages and on single-story ones.
+func markVote(layout []discordgo.MessageComponent, id int64, vote int) []discordgo.MessageComponent {
+	fresh := voteRow(id, vote)
+	if len(layout) == 0 { // Discord sent no message: a single-story row
+		return fresh
+	}
+	prefix := fmt.Sprintf("vote:%d:", id)
+	out := slices.Clone(layout)
+	for i, c := range layout {
+		if row, ok := c.(*discordgo.ActionsRow); ok && len(row.Components) > 0 {
+			if b, ok := row.Components[0].(*discordgo.Button); ok && strings.HasPrefix(b.CustomID, prefix) {
+				out[i] = fresh[0]
 			}
 		}
 	}
-	return nil
+	return out
 }
 
 func formatDiscordStory(st Story) string {
