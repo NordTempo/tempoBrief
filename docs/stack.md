@@ -55,6 +55,7 @@ internal/deliver/   Discord, email, ntfy, webhooks, tracked and vote links
 internal/auth/      password, sessions, rate limit
 internal/api/       HTTP handlers and API types (tygo source)
 web/                web app; web/dist is embedded
+site/               brief.nordtempo.com, a static page with no build step
 design/             design notes
 docs/               specs
 ```

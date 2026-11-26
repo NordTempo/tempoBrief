@@ -1,0 +1,12 @@
+# Serves the page on :8080 for Dock, which terminates TLS in front.
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	root * /srv
+	encode zstd gzip
+	header /fonts/* Cache-Control "public, max-age=604800"
+	file_server
+}
