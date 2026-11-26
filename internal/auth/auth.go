@@ -118,12 +118,18 @@ func (s *Service) Login(ctx context.Context, r *http.Request, password string) (
 		return "", ErrBadPassword
 	}
 	s.limiter.succeed(client)
+	return s.StartSession(ctx)
+}
+
+// StartSession creates a session and returns its token, for a login the caller
+// has already verified (the password above, or Sign in with GitHub).
+func (s *Service) StartSession(ctx context.Context) (string, error) {
 	token := make([]byte, 32)
 	if _, err := rand.Read(token); err != nil {
 		return "", err
 	}
 	now := s.now().Unix()
-	_, err = s.db.DB.ExecContext(ctx,
+	_, err := s.db.DB.ExecContext(ctx,
 		"INSERT INTO auth_sessions(token_hash, created_at, expires_at, last_seen) VALUES(?, ?, ?, ?)",
 		tokenHash(token), now, now+int64(sessionLifetime.Seconds()), now)
 	if err != nil {

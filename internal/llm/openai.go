@@ -56,6 +56,11 @@ func (m openAIModel) JSON(ctx context.Context, req Request) ([]byte, error) {
 	if req.Effort != "" && m.base == defaultOpenAIBase {
 		body["reasoning_effort"] = req.Effort
 	}
+	// OpenRouter routes a model to several hosts; only use the ones that honour
+	// the JSON schema, instead of getting free text back from the others.
+	if strings.Contains(m.base, "openrouter.ai") {
+		body["provider"] = map[string]any{"require_parameters": true}
+	}
 	b, err := json.Marshal(body)
 	if err != nil {
 		return nil, err

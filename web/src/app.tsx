@@ -43,7 +43,7 @@ export function App() {
 	if (!user.authenticated && !user.publicPages) {
 		return (
 			<div class="mx-auto max-w-[480px] px-5 pt-[env(safe-area-inset-top)]">
-				<Login onLoggedIn={loggedIn} />
+				<Login onLoggedIn={loggedIn} github={user.githubLogin} />
 			</div>
 		);
 	}
@@ -79,7 +79,10 @@ export function App() {
 							component={({ id }: { id: string }) => <Brief id={id} signedIn={false} />}
 						/>
 						<Route path="/stories" component={() => <Stories signedIn={false} />} />
-						<Route default component={() => <Login onLoggedIn={loggedIn} />} />
+						<Route
+							default
+							component={() => <Login onLoggedIn={loggedIn} github={user.githubLogin} />}
+						/>
 					</Router>
 				)}
 			</Shell>

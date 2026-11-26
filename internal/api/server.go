@@ -39,14 +39,16 @@ type Deps struct {
 
 type Server struct {
 	Deps
-	now func() time.Time
+	now    func() time.Time
+	oauth  oauthStates
+	github githubEndpoints
 }
 
 func New(d Deps) *Server {
 	if d.Configure == nil {
 		d.Configure = func(settings.Settings) {}
 	}
-	return &Server{Deps: d, now: time.Now}
+	return &Server{Deps: d, now: time.Now, github: realGitHub}
 }
 
 // Handler wires every route.
@@ -59,6 +61,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/me", s.me)
 	mux.HandleFunc("POST /api/v1/login", s.login)
 	mux.HandleFunc("POST /api/v1/logout", s.logout)
+
+	// Sign in with GitHub: GitHub sends the browser back to these. Each checks
+	// a one-time state bound to the browser that started the flow.
+	mux.HandleFunc("GET /auth/github/login", s.githubLogin)
+	mux.HandleFunc("GET /auth/github/callback", s.githubCallback)
+	mux.HandleFunc("GET /auth/github/setup", s.githubSetupDone)
 
 	// Public links that deliveries point at. Clicks only redirect to a stored
 	// story URL (never an open redirect); votes need a signature.
@@ -80,6 +88,9 @@ func (s *Server) Handler() http.Handler {
 	private := http.NewServeMux()
 	private.HandleFunc("GET /api/v1/status", s.status)
 	private.HandleFunc("PUT /api/v1/password", s.changePassword)
+	private.HandleFunc("GET /api/v1/github", s.githubStatus)
+	private.HandleFunc("POST /api/v1/github/setup", s.githubSetup)
+	private.HandleFunc("DELETE /api/v1/github", s.githubRemove)
 
 	private.HandleFunc("POST /api/v1/briefs/send", s.sendBrief)
 	private.HandleFunc("PUT /api/v1/stories/{id}/vote", s.vote)
@@ -159,7 +170,13 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	gh, err := s.loadGitHub(r.Context())
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, Me{
+		GitHubLogin:     gh.ready(),
 		AuthMode:        AuthMode(s.Auth.Mode()),
 		Authenticated:   s.Auth.Authenticated(r),
 		PasswordFromEnv: s.Auth.PasswordFromEnv(),
@@ -281,7 +298,7 @@ func (s *Server) internal(w http.ResponseWriter, err error) {
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://github.com")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Content-Type-Options", "nosniff")

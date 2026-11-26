@@ -23,6 +23,12 @@ check them before relying on it.
 setup checklist counts the provider as working once a call succeeded with the
 current provider and model.
 
+**OpenRouter** (base URL `https://openrouter.ai/api/v1`): requests ask for
+`provider.require_parameters`, so OpenRouter only routes to hosts that honour
+the JSON schema. Free models (IDs ending in `:free`) allow 20 requests a minute
+and 50 a day (1000 after buying 10 credits once), enough for the volume below.
+Pick one whose `supported_parameters` include `structured_outputs`.
+
 Rough volume for 40 feeds: 300 to 600 new stories a day, so 10 to 15 scoring
 calls, one or two duplicate checks per brief, and a policy rewrite every few
 days.

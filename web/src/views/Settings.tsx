@@ -9,7 +9,7 @@ import type {
 	ProviderKind,
 	Settings as SettingsData,
 } from "../api/settings.gen";
-import type { Me, SettingsResponse, TestResult } from "../api/types.gen";
+import type { GitHubSetup, GitHubStatus, Me, SettingsResponse, TestResult } from "../api/types.gen";
 import { invalidate, useApi } from "../api/useApi";
 import {
 	ErrorLine,
@@ -425,6 +425,8 @@ export function Settings({ me }: { me: Me }) {
 					</p>
 				)}
 			</Section>
+
+			<GitHubSection />
 
 			{!me.passwordFromEnv && <PasswordSection />}
 
@@ -845,6 +847,86 @@ function CopyLine({ label, value }: { label: string; value: string }) {
 				</LinkButton>
 			</div>
 		</div>
+	);
+}
+
+const GITHUB_RESULT: Record<string, { text: string; bad: boolean }> = {
+	ready: { text: "Ready. Log out and try Sign in with GitHub.", bad: false },
+	failed: { text: "GitHub did not finish creating the app. Try again.", bad: true },
+	expired: { text: "That took too long or came from another browser. Try again.", bad: true },
+};
+
+/**
+ * Sign in with GitHub. "Set up" posts a prefilled GitHub App to GitHub; the
+ * reader clicks Create there and comes back to ?github=ready.
+ */
+function GitHubSection() {
+	const status = useApi<GitHubStatus>("/github", 0);
+	const result = GITHUB_RESULT[new URLSearchParams(location.search).get("github") ?? ""];
+	const busy = useSignal(false);
+	const gh = status.data;
+	if (!gh) return null;
+
+	const setUp = async () => {
+		busy.value = true;
+		try {
+			const res = await apiSend<GitHubSetup>("POST", "/github/setup");
+			// GitHub's manifest flow wants a form POST with the manifest as a field.
+			const form = document.createElement("form");
+			form.method = "post";
+			form.action = res.action;
+			const field = document.createElement("input");
+			field.type = "hidden";
+			field.name = "manifest";
+			field.value = res.manifest;
+			form.append(field);
+			document.body.append(form);
+			form.submit();
+		} catch {
+			busy.value = false;
+		}
+	};
+
+	return (
+		<Section id="signin" title="Sign in with GitHub">
+			{gh.enabled ? (
+				<>
+					<p>
+						On for <span class="text-ink">@{gh.login}</span>. The password still works.
+					</p>
+					<p class="text-label text-muted">
+						<a href={gh.appUrl} target="_blank" rel="noopener" class="text-accent hover:text-ink">
+							The app on GitHub
+						</a>
+						{" · "}
+						<LinkButton
+							onClick={async () => {
+								if (!confirm("Turn off Sign in with GitHub? Delete the app on GitHub too.")) return;
+								await apiSend("DELETE", "/github");
+								status.reload();
+							}}
+						>
+							Turn off
+						</LinkButton>
+					</p>
+				</>
+			) : gh.available ? (
+				<>
+					<p class="text-secondary">
+						Log in with your GitHub account instead of the password. GitHub opens with the app
+						filled in; click Create and you are back here.
+					</p>
+					<div>
+						<SecondaryButton disabled={busy.value} onClick={setUp}>
+							{busy.value ? "Opening GitHub" : "Set up with GitHub"}
+						</SecondaryButton>
+					</div>
+				</>
+			) : (
+				<p class="text-muted">Needs TEMPOBRIEF_PUBLIC_URL, so GitHub can send you back.</p>
+			)}
+			{result && <p class={`text-label ${result.bad ? "text-bad" : "text-good"}`}>{result.text}</p>}
+		</Section>
 	);
 }
 

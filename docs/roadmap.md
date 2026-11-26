@@ -45,6 +45,9 @@ zoom), safe-area insets. JS 22 KB gzipped.
       schedules, alerts, channels with test, learning switches, feed URLs.
 - [ ] Add to Home Screen icon and manifest.
 - [x] Public pages: brief and stories readable without logging in, no votes.
+- [x] Sign in with GitHub, set up from Settings with GitHub's manifest flow.
+
+More sign-in providers (generic OIDC: Google, Authentik, Pocket ID) later.
 
 ## Later
 

@@ -19,6 +19,10 @@ export interface Me {
   authenticated: boolean;
   passwordFromEnv: boolean;
   /**
+   * GitHubLogin: "Sign in with GitHub" is set up.
+   */
+  githubLogin: boolean;
+  /**
    * PublicPages: the brief and stories can be read without logging in.
    */
   publicPages: boolean;
@@ -26,6 +30,25 @@ export interface Me {
 }
 export interface LoginRequest {
   password: string;
+}
+/**
+ * GitHubStatus is the Sign in with GitHub section of Settings.
+ */
+export interface GitHubStatus {
+  /**
+   * Available is false without a public URL, which GitHub must send the reader back to.
+   */
+  available: boolean;
+  enabled: boolean;
+  login: string; // the one GitHub account let in
+  appUrl: string; // the app's page on GitHub
+}
+/**
+ * GitHubSetup is the form the web app posts to GitHub to create the app.
+ */
+export interface GitHubSetup {
+  action: string;
+  manifest: string;
 }
 export interface PasswordRequest {
   current: string;

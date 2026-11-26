@@ -24,7 +24,7 @@ fresh database, or accept a few days of weaker grouping and taste.
 
 One password (argon2id), cookie sessions for 30 days, login rate limiting,
 SameSite=Strict cookies plus a same-origin check on mutations. Unauthenticated
-routes: `/healthz`, login, `/r/{id}` (redirect to a stored URL), signed vote
+routes: `/healthz`, login, the `/auth/github/*` redirects, `/r/{id}` (redirect to a stored URL), signed vote
 links, and the read-token outputs `/brief.json` and `/feed.xml`.
 
 **Public pages** (Settings, off by default) let anyone read the brief and
@@ -33,6 +33,23 @@ reader's votes, opens, taste notes or delivery results, no vote buttons, and
 plain article links that do not count as opens. Everything else still needs a
 session; "Log in" sits at the right of the header. Every response carries
 `X-Robots-Tag: noindex`, so public pages stay out of search engines.
+
+### Sign in with GitHub
+
+Optional, set up from Settings, and needs `TEMPOBRIEF_PUBLIC_URL`. "Set up
+with GitHub" posts a prefilled GitHub App to GitHub's
+[manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest):
+a private app with no permissions and no webhook, whose callback is
+`/auth/github/callback`. The reader clicks Create; GitHub sends them back to
+`/auth/github/setup` with a code that tempoBrief exchanges for the app's client
+ID and secret. The account that created the app is the only one let in,
+matched by its numeric GitHub user ID.
+
+Sign-in is the web flow with PKCE. Every flow has a one-time state, valid ten
+minutes and bound to the browser that started it with a cookie. The client
+secret and the allowed account are stored apart from the settings document,
+so only this flow changes them; "Turn off" in Settings forgets them (delete
+the app on GitHub too). The password keeps working.
 
 ## Settings
 

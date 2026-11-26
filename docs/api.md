@@ -11,8 +11,10 @@ reads also answer without one, minus the reader's reactions
 | Method and path | Does |
 |---|---|
 | `GET /healthz` | `ok` when the database is writable |
-| `GET /api/v1/me` | Auth mode, logged in or not, public pages on or not, version |
+| `GET /api/v1/me` | Auth mode, logged in or not, GitHub sign-in on, public pages on, version |
 | `POST /api/v1/login` · `POST /api/v1/logout` · `PUT /api/v1/password` | Session handling |
+| `GET /api/v1/github` · `POST /api/v1/github/setup` · `DELETE /api/v1/github` | Sign in with GitHub: status, the manifest form to post to GitHub, turn off |
+| `GET /auth/github/login` · `/auth/github/callback` · `/auth/github/setup` | Browser redirects of the GitHub flows ([deployment.md](deployment.md#sign-in-with-github)) |
 | `GET /api/v1/status` | Step health, feed counts, stories scored today, last brief, setup checklist |
 | `GET /api/v1/briefs` · `GET /api/v1/briefs/latest` · `GET /api/v1/briefs/{id}` | Brief list and briefs with stories grouped by topic |
 | `POST /api/v1/briefs/send` `{scheduleId}` | Build and send that brief now |

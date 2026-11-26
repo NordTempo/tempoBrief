@@ -22,6 +22,8 @@ type Me struct {
 	AuthMode        AuthMode `json:"authMode"`
 	Authenticated   bool     `json:"authenticated"`
 	PasswordFromEnv bool     `json:"passwordFromEnv"`
+	// GitHubLogin: "Sign in with GitHub" is set up.
+	GitHubLogin bool `json:"githubLogin"`
 	// PublicPages: the brief and stories can be read without logging in.
 	PublicPages bool   `json:"publicPages"`
 	Version     string `json:"version"`
@@ -29,6 +31,21 @@ type Me struct {
 
 type LoginRequest struct {
 	Password string `json:"password"`
+}
+
+// GitHubStatus is the Sign in with GitHub section of Settings.
+type GitHubStatus struct {
+	// Available is false without a public URL, which GitHub must send the reader back to.
+	Available bool   `json:"available"`
+	Enabled   bool   `json:"enabled"`
+	Login     string `json:"login"`  // the one GitHub account let in
+	AppURL    string `json:"appUrl"` // the app's page on GitHub
+}
+
+// GitHubSetup is the form the web app posts to GitHub to create the app.
+type GitHubSetup struct {
+	Action   string `json:"action"`
+	Manifest string `json:"manifest"`
 }
 
 type PasswordRequest struct {
