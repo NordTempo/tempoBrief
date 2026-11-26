@@ -17,7 +17,7 @@ const BARS = [
 ];
 
 /** Everything scored, best first: for catching up beyond the brief. */
-export function Stories() {
+export function Stories({ signedIn }: { signedIn: boolean }) {
 	const hours = useSignal(24);
 	const min = useSignal(5);
 	const topic = useSignal("");
@@ -34,7 +34,7 @@ export function Stories() {
 	return (
 		<>
 			<PageHead title="Stories">
-				<p>Everything scored, best first. Votes here teach it too.</p>
+				<p>Everything scored, best first.{signedIn && " Votes here teach it too."}</p>
 			</PageHead>
 			<div class="mt-6 flex flex-col gap-3">
 				<input
@@ -76,16 +76,18 @@ export function Stories() {
 							</option>
 						))}
 					</select>
-					<button
-						type="button"
-						class={`min-h-11 ${voted.value ? "text-ink" : "text-muted"}`}
-						aria-pressed={voted.value}
-						onClick={() => {
-							voted.value = !voted.value;
-						}}
-					>
-						Voted
-					</button>
+					{signedIn && (
+						<button
+							type="button"
+							class={`min-h-11 ${voted.value ? "text-ink" : "text-muted"}`}
+							aria-pressed={voted.value}
+							onClick={() => {
+								voted.value = !voted.value;
+							}}
+						>
+							Voted
+						</button>
+					)}
 				</div>
 			</div>
 			{data.error && <ErrorLine message={data.error.message} onRetry={data.reload} />}
@@ -96,7 +98,7 @@ export function Stories() {
 						{plural(stories.length, "story", "stories")}
 					</p>
 					{stories.map((s) => (
-						<StoryItem key={s.id} story={s} showTopic />
+						<StoryItem key={s.id} story={s} showTopic canVote={signedIn} />
 					))}
 				</>
 			)}

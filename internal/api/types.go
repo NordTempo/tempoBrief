@@ -22,7 +22,9 @@ type Me struct {
 	AuthMode        AuthMode `json:"authMode"`
 	Authenticated   bool     `json:"authenticated"`
 	PasswordFromEnv bool     `json:"passwordFromEnv"`
-	Version         string   `json:"version"`
+	// PublicPages: the brief and stories can be read without logging in.
+	PublicPages bool   `json:"publicPages"`
+	Version     string `json:"version"`
 }
 
 type LoginRequest struct {

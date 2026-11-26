@@ -112,3 +112,55 @@ func TestPrivateRoutesNeedLoginAndReadRoutesNeedToken(t *testing.T) {
 		}
 	}
 }
+
+func TestPublicPagesShowStoriesWithoutTheReadersReactions(t *testing.T) {
+	srv, db, st := newTestServer(t)
+	ctx := context.Background()
+	id := addStory(t, db)
+	taste := 0.8
+	if err := db.SaveScores(ctx, []store.Scored{{ID: id, LLMScore: 7, Taste: &taste, TasteN: 3, Score: 8, Reason: "matches"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetVote(ctx, id, 1); err != nil {
+		t.Fatal(err)
+	}
+	get := func(path string) *http.Response {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	// Off by default: reading needs a session.
+	if resp := get("/api/v1/stories?min=0"); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("public pages off: got %d", resp.StatusCode)
+	}
+
+	st.PublicPages = true
+	if err := settings.Save(ctx, db, st); err != nil {
+		t.Fatal(err)
+	}
+	resp := get("/api/v1/stories?min=0")
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), `"title":"A story"`) {
+		t.Fatalf("public stories: %d %s", resp.StatusCode, body)
+	}
+	for _, want := range []string{`"vote":0`, `"taste":null`, `"tasteN":0`, `"why":"matches"`} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("a visitor must not see the reader's reactions: want %s in %s", want, body)
+		}
+	}
+
+	// Everything else still needs a session.
+	for _, path := range []string{"/api/v1/settings", "/api/v1/learning", "/api/v1/feeds", "/api/v1/status"} {
+		if resp := get(path); resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("%s: got %d", path, resp.StatusCode)
+		}
+	}
+	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/stories/"+strconv.FormatInt(id, 10)+"/vote", strings.NewReader(`{"vote":-1}`))
+	req.Header.Set("Content-Type", "application/json")
+	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anonymous vote: %v %v", resp.StatusCode, err)
+	}
+}

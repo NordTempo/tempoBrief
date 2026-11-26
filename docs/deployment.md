@@ -27,10 +27,17 @@ SameSite=Strict cookies plus a same-origin check on mutations. Unauthenticated
 routes: `/healthz`, login, `/r/{id}` (redirect to a stored URL), signed vote
 links, and the read-token outputs `/brief.json` and `/feed.xml`.
 
+**Public pages** (Settings, off by default) let anyone read the brief and
+stories pages without logging in. Visitors get the same stories without the
+reader's votes, opens, taste notes or delivery results, no vote buttons, and
+plain article links that do not count as opens. Everything else still needs a
+session; "Log in" sits at the right of the header. Every response carries
+`X-Robots-Tag: noindex`, so public pages stay out of search engines.
+
 ## Settings
 
 One JSON document (`internal/settings`): interests, language, time zone,
-provider, brief schedules, alerts, channels, learning switches, the read token
+provider, brief schedules, alerts, channels, learning switches, public pages, the read token
 and the link-signing secret. The API returns it with secrets replaced by a
 placeholder; sending the placeholder back keeps the stored value.
 

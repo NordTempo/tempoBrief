@@ -33,6 +33,10 @@ type Settings struct {
 	Channels []Channel       `json:"channels"`
 	Learning Learning        `json:"learning"`
 
+	// PublicPages lets anyone read the brief and stories pages without logging
+	// in, without the reader's votes or taste. Everything else needs a session.
+	PublicPages bool `json:"publicPages"`
+
 	// ReadToken lets unauthenticated readers (Home Assistant, a feed reader)
 	// fetch the latest brief and the RSS feed.
 	ReadToken string `json:"readToken"`

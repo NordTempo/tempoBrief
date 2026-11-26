@@ -385,6 +385,19 @@ export function Settings({ me }: { me: Me }) {
 				/>
 			</Section>
 
+			<Section id="public" title="Public pages">
+				<Toggle
+					label="Anyone can read the brief and stories"
+					checked={d.publicPages}
+					onChange={(v) =>
+						update((s) => {
+							s.publicPages = v;
+						})
+					}
+					hint="Without your votes. Everything else still needs a login."
+				/>
+			</Section>
+
 			<Section id="outputs" title="Home Assistant and feed readers">
 				{res?.feedUrl ? (
 					<>

@@ -44,6 +44,7 @@ zoom), safe-area insets. JS 22 KB gzipped.
 - [x] Settings: interests, language and time zone, provider with test,
       schedules, alerts, channels with test, learning switches, feed URLs.
 - [ ] Add to Home Screen icon and manifest.
+- [x] Public pages: brief and stories readable without logging in, no votes.
 
 ## Later
 

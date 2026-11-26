@@ -18,6 +18,10 @@ export interface Me {
   authMode: AuthMode;
   authenticated: boolean;
   passwordFromEnv: boolean;
+  /**
+   * PublicPages: the brief and stories can be read without logging in.
+   */
+  publicPages: boolean;
   version: string;
 }
 export interface LoginRequest {

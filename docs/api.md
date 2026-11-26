@@ -4,12 +4,14 @@ JSON over HTTP. Request and response types live in
 [internal/api/types.go](../internal/api/types.go) and are generated into
 `web/src/api/types.gen.ts`. Errors are `{"error": {"code", "message", "fields"?}}`.
 Times are RFC 3339 UTC strings. Everything under `/api/v1` except `me`, `login`
-and `logout` needs a session.
+and `logout` needs a session. With public pages on, the four brief and stories
+reads also answer without one, minus the reader's reactions
+([deployment.md](deployment.md#auth)).
 
 | Method and path | Does |
 |---|---|
 | `GET /healthz` | `ok` when the database is writable |
-| `GET /api/v1/me` | Auth mode, logged in or not, version |
+| `GET /api/v1/me` | Auth mode, logged in or not, public pages on or not, version |
 | `POST /api/v1/login` · `POST /api/v1/logout` · `PUT /api/v1/password` | Session handling |
 | `GET /api/v1/status` | Step health, feed counts, stories scored today, last brief, setup checklist |
 | `GET /api/v1/briefs` · `GET /api/v1/briefs/latest` · `GET /api/v1/briefs/{id}` | Brief list and briefs with stories grouped by topic |

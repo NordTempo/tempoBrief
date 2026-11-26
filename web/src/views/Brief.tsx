@@ -14,16 +14,22 @@ import { ErrorLine, LinkButton, Loading, PageHead, SectionLabel } from "../compo
 import { formatDate, formatShortDate, formatTime, plural } from "../lib/format";
 import { Setup } from "./Setup";
 
-/** The latest brief (route "/") or one earlier brief ("/briefs/:id"). */
-export function Brief({ id }: { id?: string }) {
+/**
+ * The latest brief (route "/") or one earlier brief ("/briefs/:id"). Visitors
+ * (signedIn false, with public pages on) see the stories without votes, setup
+ * or sending.
+ */
+export function Brief({ id, signedIn }: { id?: string; signedIn: boolean }) {
 	const path = id ? `/briefs/${id}` : "/briefs/latest";
 	const brief = useApi<BriefData>(path, 60_000);
-	const status = useApi<Status>("/status", 60_000);
-	const settings = useApi<SettingsResponse>("/settings", 0);
+	const status = useApi<Status>(signedIn ? "/status" : null, 60_000);
+	const settings = useApi<SettingsResponse>(signedIn ? "/settings" : null, 0);
 
 	if (brief.error?.status === 404 && !id) {
-		return (
+		return signedIn ? (
 			<NoBrief status={status.data} settings={settings.data?.settings} onSent={brief.reload} />
+		) : (
+			<PageHead title="No brief yet" />
 		);
 	}
 	if (!brief.data) {
@@ -65,7 +71,7 @@ export function Brief({ id }: { id?: string }) {
 				<section key={sec.topic}>
 					<SectionLabel>{sec.topic}</SectionLabel>
 					{sec.stories.map((s) => (
-						<StoryItem key={s.id} story={s} />
+						<StoryItem key={s.id} story={s} canVote={signedIn} />
 					))}
 				</section>
 			))}

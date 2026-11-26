@@ -3,7 +3,7 @@ import { ApiError, apiSend } from "../api/client";
 import { invalidate } from "../api/useApi";
 import { PageHead, PrimaryButton, TextField } from "../components/ui";
 
-/** Login page, in the column layout. */
+/** Login form, in the column layout. The caller provides the page frame. */
 export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
 	const password = useSignal("");
 	const error = useSignal<string | null>(null);
@@ -31,7 +31,7 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
 	};
 
 	return (
-		<div class="mx-auto max-w-[480px] px-5 pt-[env(safe-area-inset-top)]">
+		<div class="max-w-[480px]">
 			<PageHead context="tempoBrief" title="Log in" />
 			<form class="mt-8 flex flex-col gap-5" onSubmit={submit}>
 				<TextField

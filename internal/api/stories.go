@@ -29,6 +29,15 @@ func storyView(st store.Story) Story {
 	}
 }
 
+// publicStory drops what only the reader should see from a story shown to a
+// visitor: their reactions, and the taste parts that would reveal them.
+func publicStory(v Story) Story {
+	v.Vote, v.Clicked, v.Ignored = 0, false, false
+	v.Taste, v.TasteN, v.LLMScore = nil, 0, nil
+	v.Why = v.Reason
+	return v
+}
+
 // GET /api/v1/stories?hours=24&min=0&topic=&q=&voted=true
 func (s *Server) stories(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -38,8 +47,10 @@ func (s *Server) stories(w http.ResponseWriter, r *http.Request) {
 	}
 	minScore, _ := strconv.ParseFloat(q.Get("min"), 64)
 	since := s.now().Add(-time.Duration(hours) * time.Hour)
+	public := s.public(r)
 	list, err := s.DB.ListStories(r.Context(), store.StoryFilter{
-		Since: since, MinScore: minScore, Topic: q.Get("topic"), Query: q.Get("q"), Voted: q.Get("voted") == "true",
+		Since: since, MinScore: minScore, Topic: q.Get("topic"), Query: q.Get("q"),
+		Voted: q.Get("voted") == "true" && !public,
 	})
 	if err != nil {
 		s.internal(w, err)
@@ -55,7 +66,11 @@ func (s *Server) stories(w http.ResponseWriter, r *http.Request) {
 		out.Topics = []string{}
 	}
 	for _, st := range list {
-		out.Stories = append(out.Stories, storyView(st))
+		v := storyView(st)
+		if public {
+			v = publicStory(v)
+		}
+		out.Stories = append(out.Stories, v)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -188,8 +203,13 @@ func (s *Server) briefs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := BriefsResponse{Briefs: make([]BriefSummary, 0, len(list))}
+	public := s.public(r)
 	for _, b := range list {
-		out.Briefs = append(out.Briefs, briefSummary(b))
+		sum := briefSummary(b)
+		if public {
+			sum.Deliveries = []Delivery{} // channel names and errors are the reader's
+		}
+		out.Briefs = append(out.Briefs, sum)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -226,6 +246,10 @@ func (s *Server) writeBrief(w http.ResponseWriter, r *http.Request, b store.Brie
 		ID: b.ID, ScheduleID: b.ScheduleID, Title: b.Title, CreatedAt: timeString(b.CreatedAt),
 		Sections: []BriefSection{}, Deliveries: deliveries(b.Deliveries),
 	}
+	public := s.public(r)
+	if public {
+		out.Deliveries = []Delivery{}
+	}
 	index := map[string]int{}
 	for _, st := range stories {
 		i, ok := index[st.Topic]
@@ -234,7 +258,11 @@ func (s *Server) writeBrief(w http.ResponseWriter, r *http.Request, b store.Brie
 			index[st.Topic] = i
 			out.Sections = append(out.Sections, BriefSection{Topic: st.Topic})
 		}
-		out.Sections[i].Stories = append(out.Sections[i].Stories, storyView(st))
+		v := storyView(st)
+		if public {
+			v = publicStory(v)
+		}
+		out.Sections[i].Stories = append(out.Sections[i].Stories, v)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

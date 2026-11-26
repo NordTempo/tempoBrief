@@ -70,17 +70,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /brief.json", s.briefJSON)
 	mux.HandleFunc("GET /feed.xml", s.feedXML)
 
+	// Reading briefs and stories needs a session, or public pages turned on.
+	mux.Handle("GET /api/v1/briefs", s.readable(s.briefs))
+	mux.Handle("GET /api/v1/briefs/latest", s.readable(s.latestBrief))
+	mux.Handle("GET /api/v1/briefs/{id}", s.readable(s.brief))
+	mux.Handle("GET /api/v1/stories", s.readable(s.stories))
+
 	// Everything else under /api/v1 needs a session.
 	private := http.NewServeMux()
 	private.HandleFunc("GET /api/v1/status", s.status)
 	private.HandleFunc("PUT /api/v1/password", s.changePassword)
 
-	private.HandleFunc("GET /api/v1/briefs", s.briefs)
-	private.HandleFunc("GET /api/v1/briefs/latest", s.latestBrief)
-	private.HandleFunc("GET /api/v1/briefs/{id}", s.brief)
 	private.HandleFunc("POST /api/v1/briefs/send", s.sendBrief)
-
-	private.HandleFunc("GET /api/v1/stories", s.stories)
 	private.HandleFunc("PUT /api/v1/stories/{id}/vote", s.vote)
 
 	private.HandleFunc("GET /api/v1/feeds", s.feeds)
@@ -122,6 +123,28 @@ func (s *Server) requireSession(next http.Handler) http.Handler {
 	})
 }
 
+// readable serves a read route to the logged-in reader, and to anyone when the
+// reader turned public pages on. Handlers call s.public(r) to strip what only
+// the reader should see.
+func (s *Server) readable(h http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.Auth.Authenticated(r) {
+			st, ok := s.settings(w, r)
+			if !ok {
+				return
+			}
+			if !st.PublicPages {
+				writeError(w, http.StatusUnauthorized, "unauthorized", "log in first")
+				return
+			}
+		}
+		h(w, r)
+	})
+}
+
+// public reports whether a read route is serving a visitor rather than the reader.
+func (s *Server) public(r *http.Request) bool { return !s.Auth.Authenticated(r) }
+
 func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
 	if err := s.DB.Ping(r.Context()); err != nil {
 		http.Error(w, "database not writable", http.StatusServiceUnavailable)
@@ -132,10 +155,15 @@ func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
+	st, ok := s.settings(w, r)
+	if !ok {
+		return
+	}
 	writeJSON(w, http.StatusOK, Me{
 		AuthMode:        AuthMode(s.Auth.Mode()),
 		Authenticated:   s.Auth.Authenticated(r),
 		PasswordFromEnv: s.Auth.PasswordFromEnv(),
+		PublicPages:     st.PublicPages,
 		Version:         s.Version,
 	})
 }
@@ -257,6 +285,8 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Content-Type-Options", "nosniff")
+		// A personal instance, public pages included, stays out of search engines.
+		h.Set("X-Robots-Tag", "noindex, nofollow")
 		next.ServeHTTP(w, r)
 	})
 }

@@ -1,4 +1,5 @@
 import { useSignal } from "@preact/signals";
+import { useEffect } from "preact/hooks";
 import { apiSend } from "../api/client";
 import type { Story } from "../api/types.gen";
 import { formatScore, formatSources } from "../lib/format";
@@ -7,10 +8,24 @@ import { formatScore, formatSources } from "../lib/format";
  * One story as direction A shows it: title, summary, and a quiet meta line
  * (score, outlets, why). Votes sit in a column on the right: two 44 px
  * targets, so they work with a thumb. Tapping the chosen vote again clears it.
- * Titles open through /r/{id}, so opening a story counts as a signal.
+ * For the reader, titles open through /r/{id}, so opening a story counts as a
+ * signal. Visitors (canVote false) get no votes and plain links.
  */
-export function StoryItem({ story, showTopic }: { story: Story; showTopic?: boolean }) {
+export function StoryItem({
+	story,
+	showTopic,
+	canVote,
+}: {
+	story: Story;
+	showTopic?: boolean;
+	canVote: boolean;
+}) {
 	const vote = useSignal(story.vote);
+	// Follow fresh data: a vote from Discord or email, or logging in after
+	// reading as a visitor.
+	useEffect(() => {
+		vote.value = story.vote;
+	}, [story.vote]);
 	const showSources = useSignal(false);
 	const failed = useSignal(false);
 
@@ -32,7 +47,7 @@ export function StoryItem({ story, showTopic }: { story: Story; showTopic?: bool
 		<article class="flex gap-3 border-line border-b py-4 sm:gap-6">
 			<div class="min-w-0 flex-1">
 				<a
-					href={`/r/${story.id}`}
+					href={canVote ? `/r/${story.id}` : story.url}
 					target="_blank"
 					rel="noopener"
 					class="font-medium text-body-lg hover:text-accent"
@@ -64,24 +79,26 @@ export function StoryItem({ story, showTopic }: { story: Story; showTopic?: bool
 				{showSources.value && <p class="mt-1 text-label text-faint">{story.sources.join(", ")}</p>}
 				{failed.value && <p class="mt-1 text-label text-bad">Vote not saved. Try again.</p>}
 			</div>
-			<div class="-mt-1 flex shrink-0 flex-col">
-				<VoteButton
-					label="More like this"
-					active={vote.value === 1}
-					tone="good"
-					onClick={() => cast(1)}
-				>
-					▲
-				</VoteButton>
-				<VoteButton
-					label="Less like this"
-					active={vote.value === -1}
-					tone="bad"
-					onClick={() => cast(-1)}
-				>
-					▼
-				</VoteButton>
-			</div>
+			{canVote && (
+				<div class="-mt-1 flex shrink-0 flex-col">
+					<VoteButton
+						label="More like this"
+						active={vote.value === 1}
+						tone="good"
+						onClick={() => cast(1)}
+					>
+						▲
+					</VoteButton>
+					<VoteButton
+						label="Less like this"
+						active={vote.value === -1}
+						tone="bad"
+						onClick={() => cast(-1)}
+					>
+						▼
+					</VoteButton>
+				</div>
+			)}
 		</article>
 	);
 }

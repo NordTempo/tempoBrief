@@ -25,6 +25,11 @@ export interface Settings {
   channels: Channel[];
   learning: Learning;
   /**
+   * PublicPages lets anyone read the brief and stories pages without logging
+   * in, without the reader's votes or taste. Everything else needs a session.
+   */
+  publicPages: boolean;
+  /**
    * ReadToken lets unauthenticated readers (Home Assistant, a feed reader)
    * fetch the latest brief and the RSS feed.
    */
