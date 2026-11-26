@@ -68,6 +68,10 @@ export function App() {
 						<Route path="/missed" component={Missed} />
 						<Route path="/feeds" component={Feeds} />
 						<Route path="/settings" component={() => <Settings me={user} />} />
+						<Route
+							path="/settings/:area"
+							component={({ area }: { area: string }) => <Settings me={user} area={area} />}
+						/>
 						<Route path="/login" component={GoHome} />
 						<Route default component={() => <PageHead title="Not found" />} />
 					</Router>

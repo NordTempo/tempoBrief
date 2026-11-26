@@ -59,99 +59,276 @@ const CHANNEL_KINDS: { value: ChannelKind; label: string }[] = [
 
 const DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
-/** All settings in one scrolling page; the save bar appears once something changed. */
-export function Settings({ me }: { me: Me }) {
-	const data = useApi<SettingsResponse>("/settings", 0);
-	const draft = useSignal<SettingsData | null>(null);
-	const saved = useSignal<string>("");
-	const busy = useSignal(false);
-	const error = useSignal<string | null>(null);
+/** What an area's editor gets: the draft and a way to change it. */
+type AreaProps = {
+	d: SettingsData;
+	update: (fn: (s: SettingsData) => void) => void;
+	res: SettingsResponse;
+	dirty: boolean;
+	reload: () => void;
+};
 
-	useEffect(() => {
-		if (data.data && draft.value === null) {
-			draft.value = structuredClone(data.data.settings);
-			saved.value = JSON.stringify(data.data.settings);
-		}
-	}, [data.data]);
+/** The one-line status under an area's name in the list. */
+type AreaStatus = { text: string; warn?: boolean };
 
-	// Jump to #anchors once the page has rendered (links from the setup checklist).
-	useEffect(() => {
-		if (draft.value && location.hash) document.querySelector(location.hash)?.scrollIntoView();
-	}, [draft.value === null]);
+type Area = {
+	id: string;
+	title: string;
+	group: string;
+	status: (s: SettingsData, res: SettingsResponse, me: Me, gh?: GitHubStatus) => AreaStatus;
+} & (
+	| { Editor: (p: AreaProps) => ComponentChildren; Own?: never }
+	// Areas with their own state and actions, outside the settings document.
+	| { Own: () => ComponentChildren; Editor?: never }
+);
 
-	if (!draft.value)
-		return data.error ? (
-			<ErrorLine message={data.error.message} onRetry={data.reload} />
-		) : (
-			<Loading />
-		);
-	const d = draft.value;
-	const dirty = JSON.stringify(d) !== saved.value;
+const on = (b: boolean) => (b ? "on" : "off");
 
-	/** Edit a copy of the draft; signals need a new object to notice. */
-	const update = (fn: (s: SettingsData) => void) => {
-		const next = structuredClone(d);
-		fn(next);
-		draft.value = next;
-	};
-
-	const save = async () => {
-		busy.value = true;
-		error.value = null;
-		try {
-			const res = await apiSend<SettingsResponse>("PUT", "/settings", d);
-			draft.value = structuredClone(res.settings);
-			saved.value = JSON.stringify(res.settings);
-			invalidate();
-		} catch (err) {
-			error.value = err instanceof ApiError ? err.message : "Could not save.";
-		} finally {
-			busy.value = false;
-		}
-	};
-
-	const res = data.data;
-	return (
-		<>
-			<PageHead title="Settings" />
-
-			<Section id="interests" title="Interests">
-				<TextArea
-					label="What do you want to read about, and what not?"
-					rows={10}
-					value={d.interests}
+/**
+ * Settings, grouped like phone settings: a list of areas, each with a line
+ * saying what is set, and a short page per area with its own Save.
+ */
+const AREAS: Area[] = [
+	{
+		id: "interests",
+		title: "Interests",
+		group: "Reading",
+		status: (s) => {
+			const first = s.interests
+				.split("\n")
+				.map((l) => l.replace(/^#+\s*/, "").trim())
+				.find(Boolean);
+			return first ? { text: first } : { text: "Not written yet", warn: true };
+		},
+		Editor: ({ d, update }) => (
+			<TextArea
+				label="What do you want to read about, and what not?"
+				rows={14}
+				value={d.interests}
+				onInput={(v) =>
+					update((s) => {
+						s.interests = v;
+					})
+				}
+				hint="Write it like briefing an editor: topics, sources you trust, what to skip. Reactions refine this over time; they never override it."
+			/>
+		),
+	},
+	{
+		id: "language",
+		title: "Language and time zone",
+		group: "Reading",
+		status: (s) => ({ text: `${s.language || "English"} · ${s.timezone || "UTC"}` }),
+		Editor: ({ d, update }) => (
+			<div class="grid gap-4 sm:grid-cols-2">
+				<TextField
+					label="Summary language"
+					value={d.language}
 					onInput={(v) =>
 						update((s) => {
-							s.interests = v;
+							s.language = v;
 						})
 					}
-					hint="Write it like briefing an editor: topics, sources you trust, what to skip. Reactions refine this over time; they never override it."
+					placeholder="English"
 				/>
-				<div class="grid gap-4 sm:grid-cols-2">
-					<TextField
-						label="Summary language"
-						value={d.language}
-						onInput={(v) =>
+				<TextField
+					label="Time zone"
+					value={d.timezone}
+					onInput={(v) =>
+						update((s) => {
+							s.timezone = v;
+						})
+					}
+					placeholder="Europe/Oslo"
+				/>
+			</div>
+		),
+	},
+	{
+		id: "briefs",
+		title: "Briefs",
+		group: "Delivery",
+		status: (s) => {
+			const live = s.briefs.filter((b) => b.enabled);
+			if (live.length === 0) return { text: "None on", warn: true };
+			return {
+				text: live.map((b) => `${b.name} ${b.time} · up to ${b.maxStories}`).join(", "),
+			};
+		},
+		Editor: ({ d, update }) => (
+			<>
+				{d.briefs.map((b, i) => (
+					<BriefEditor
+						key={b.id}
+						brief={b}
+						channels={d.channels}
+						onChange={(fn) =>
 							update((s) => {
-								s.language = v;
+								const target = s.briefs[i];
+								if (target) fn(target);
 							})
 						}
-						placeholder="English"
-					/>
-					<TextField
-						label="Time zone"
-						value={d.timezone}
-						onInput={(v) =>
+						onRemove={() =>
 							update((s) => {
-								s.timezone = v;
+								s.briefs.splice(i, 1);
 							})
 						}
-						placeholder="Europe/Oslo"
 					/>
+				))}
+				<div>
+					<SecondaryButton
+						onClick={() =>
+							update((s) => {
+								s.briefs.push({
+									id: uniqueID(
+										"brief",
+										s.briefs.map((x) => x.id),
+									),
+									name: "Evening brief",
+									enabled: true,
+									time: "18:00",
+									days: [],
+									minScore: 6,
+									maxStories: 10,
+									channels: [],
+								});
+							})
+						}
+					>
+						Add a brief
+					</SecondaryButton>
 				</div>
-			</Section>
-
-			<Section id="model" title="Model">
+			</>
+		),
+	},
+	{
+		id: "alerts",
+		title: "Breaking alerts",
+		group: "Delivery",
+		status: (s) =>
+			s.alerts.enabled
+				? { text: `On · ${s.alerts.minScore}+ from ${s.alerts.minSources} outlets` }
+				: { text: "Off" },
+		Editor: ({ d, update }) => (
+			<>
+				<Toggle
+					label="Push big stories as they break"
+					checked={d.alerts.enabled}
+					onChange={(v) =>
+						update((s) => {
+							s.alerts.enabled = v;
+						})
+					}
+					hint="Only stories at or above the score, covered by enough outlets, in the last 6 hours."
+				/>
+				{d.alerts.enabled && (
+					<>
+						<div class="grid grid-cols-2 gap-4">
+							<NumberField
+								label="Minimum score"
+								min={0}
+								max={10}
+								value={d.alerts.minScore}
+								onInput={(v) =>
+									update((s) => {
+										s.alerts.minScore = v;
+									})
+								}
+							/>
+							<NumberField
+								label="Minimum outlets"
+								min={1}
+								max={20}
+								value={d.alerts.minSources}
+								onInput={(v) =>
+									update((s) => {
+										s.alerts.minSources = v;
+									})
+								}
+							/>
+						</div>
+						<ChannelPicker
+							channels={d.channels}
+							picked={d.alerts.channels}
+							onChange={(ids) =>
+								update((s) => {
+									s.alerts.channels = ids;
+								})
+							}
+						/>
+					</>
+				)}
+			</>
+		),
+	},
+	{
+		id: "channels",
+		title: "Channels",
+		group: "Delivery",
+		status: (s) =>
+			s.channels.length === 0
+				? { text: "None yet: briefs only show here", warn: true }
+				: { text: s.channels.map((c) => c.name + (c.enabled ? "" : " (off)")).join(", ") },
+		Editor: ({ d, update, dirty }) => (
+			<>
+				{d.channels.length === 0 && (
+					<p class="text-muted">No channels yet. Briefs still appear here in the web app.</p>
+				)}
+				{d.channels.map((c, i) => (
+					<ChannelEditor
+						key={c.id}
+						channel={c}
+						dirty={dirty}
+						onChange={(fn) =>
+							update((s) => {
+								const target = s.channels[i];
+								if (target) fn(target);
+							})
+						}
+						onRemove={() =>
+							update((s) => {
+								s.channels.splice(i, 1);
+								for (const b of s.briefs) b.channels = b.channels.filter((id) => id !== c.id);
+								s.alerts.channels = s.alerts.channels.filter((id) => id !== c.id);
+							})
+						}
+					/>
+				))}
+				<div class="flex flex-wrap gap-3">
+					{CHANNEL_KINDS.map((k) => (
+						<SecondaryButton
+							key={k.value}
+							onClick={() =>
+								update((s) => {
+									s.channels.push({
+										id: uniqueID(
+											k.value,
+											s.channels.map((x) => x.id),
+										),
+										kind: k.value,
+										name: k.label,
+										enabled: true,
+									});
+								})
+							}
+						>
+							Add {k.label}
+						</SecondaryButton>
+					))}
+				</div>
+			</>
+		),
+	},
+	{
+		id: "model",
+		title: "Model",
+		group: "Model and learning",
+		status: (s) => {
+			const kind = PROVIDERS.find((p) => p.value === s.provider.kind)?.label ?? s.provider.kind;
+			return { text: `${kind} · ${s.provider.model || "default model"}` };
+		},
+		Editor: ({ d, update, dirty }) => (
+			<>
 				<SelectField
 					label="Provider"
 					value={d.provider.kind}
@@ -207,151 +384,18 @@ export function Settings({ me }: { me: Me }) {
 					/>
 				)}
 				<TestButton path="/settings/test-provider" body={{}} dirty={dirty} label="Test the model" />
-			</Section>
-
-			<Section id="briefs" title="Briefs">
-				{d.briefs.map((b, i) => (
-					<BriefEditor
-						key={b.id}
-						brief={b}
-						channels={d.channels}
-						onChange={(fn) =>
-							update((s) => {
-								const target = s.briefs[i];
-								if (target) fn(target);
-							})
-						}
-						onRemove={() =>
-							update((s) => {
-								s.briefs.splice(i, 1);
-							})
-						}
-					/>
-				))}
-				<div>
-					<SecondaryButton
-						onClick={() =>
-							update((s) => {
-								s.briefs.push({
-									id: uniqueID(
-										"brief",
-										s.briefs.map((x) => x.id),
-									),
-									name: "Evening brief",
-									enabled: true,
-									time: "18:00",
-									days: [],
-									minScore: 6,
-									maxStories: 10,
-									channels: [],
-								});
-							})
-						}
-					>
-						Add a brief
-					</SecondaryButton>
-				</div>
-			</Section>
-
-			<Section id="alerts" title="Breaking alerts">
-				<Toggle
-					label="Push big stories as they break"
-					checked={d.alerts.enabled}
-					onChange={(v) =>
-						update((s) => {
-							s.alerts.enabled = v;
-						})
-					}
-					hint="Only stories at or above the score, covered by enough outlets, in the last 6 hours."
-				/>
-				{d.alerts.enabled && (
-					<>
-						<div class="grid grid-cols-2 gap-4">
-							<NumberField
-								label="Minimum score"
-								min={0}
-								max={10}
-								value={d.alerts.minScore}
-								onInput={(v) =>
-									update((s) => {
-										s.alerts.minScore = v;
-									})
-								}
-							/>
-							<NumberField
-								label="Minimum outlets"
-								min={1}
-								max={20}
-								value={d.alerts.minSources}
-								onInput={(v) =>
-									update((s) => {
-										s.alerts.minSources = v;
-									})
-								}
-							/>
-						</div>
-						<ChannelPicker
-							channels={d.channels}
-							picked={d.alerts.channels}
-							onChange={(ids) =>
-								update((s) => {
-									s.alerts.channels = ids;
-								})
-							}
-						/>
-					</>
-				)}
-			</Section>
-
-			<Section id="channels" title="Channels">
-				{d.channels.length === 0 && (
-					<p class="text-muted">No channels yet. Briefs still appear here in the web app.</p>
-				)}
-				{d.channels.map((c, i) => (
-					<ChannelEditor
-						key={c.id}
-						channel={c}
-						dirty={dirty}
-						onChange={(fn) =>
-							update((s) => {
-								const target = s.channels[i];
-								if (target) fn(target);
-							})
-						}
-						onRemove={() =>
-							update((s) => {
-								s.channels.splice(i, 1);
-								for (const b of s.briefs) b.channels = b.channels.filter((id) => id !== c.id);
-								s.alerts.channels = s.alerts.channels.filter((id) => id !== c.id);
-							})
-						}
-					/>
-				))}
-				<div class="flex flex-wrap gap-3">
-					{CHANNEL_KINDS.map((k) => (
-						<SecondaryButton
-							key={k.value}
-							onClick={() =>
-								update((s) => {
-									s.channels.push({
-										id: uniqueID(
-											k.value,
-											s.channels.map((x) => x.id),
-										),
-										kind: k.value,
-										name: k.label,
-										enabled: true,
-									});
-								})
-							}
-						>
-							Add {k.label}
-						</SecondaryButton>
-					))}
-				</div>
-			</Section>
-
-			<Section id="learning" title="Learning">
+			</>
+		),
+	},
+	{
+		id: "learning",
+		title: "Learning",
+		group: "Model and learning",
+		status: (s) => ({
+			text: `Policy ${on(s.learning.policy)} · taste ${on(s.learning.taste)} · ignored after ${s.learning.ignoreAfterHours || "never"}${s.learning.ignoreAfterHours ? " h" : ""}`,
+		}),
+		Editor: ({ d, update }) => (
+			<>
 				<Toggle
 					label="Rewrite the editorial policy from reactions"
 					checked={d.learning.policy}
@@ -384,60 +428,210 @@ export function Settings({ me }: { me: Me }) {
 					}
 					hint="0 turns this off. Needs a public URL so opens can be seen."
 				/>
-			</Section>
+			</>
+		),
+	},
+	{
+		id: "public",
+		title: "Public pages",
+		group: "Sharing",
+		status: (s) => ({
+			text: s.publicPages ? "On: anyone can read Brief and Stories" : "Off: only you",
+		}),
+		Editor: ({ d, update }) => (
+			<Toggle
+				label="Anyone can read the brief and stories"
+				checked={d.publicPages}
+				onChange={(v) =>
+					update((s) => {
+						s.publicPages = v;
+					})
+				}
+				hint="Without your votes. Everything else still needs a login."
+			/>
+		),
+	},
+	{
+		id: "outputs",
+		title: "Home Assistant and feed readers",
+		group: "Sharing",
+		status: (_, res) =>
+			res.feedUrl ? { text: "Brief JSON and RSS links" } : { text: "Needs a public URL" },
+		Editor: ({ res, reload }) =>
+			res.feedUrl ? (
+				<>
+					<CopyLine
+						label="Latest brief as JSON (Home Assistant REST sensor)"
+						value={res.briefJsonUrl}
+					/>
+					<CopyLine label="RSS of the best stories" value={res.feedUrl} />
+					<div>
+						<LinkButton
+							onClick={async () => {
+								if (!confirm("Old links stop working. Continue?")) return;
+								await apiSend("POST", "/settings/read-token");
+								reload();
+							}}
+						>
+							Make new links
+						</LinkButton>
+					</div>
+				</>
+			) : (
+				<p class="text-muted">
+					Set TEMPOBRIEF_PUBLIC_URL on the server to get these links, and tracked links and vote
+					buttons in deliveries.
+				</p>
+			),
+	},
+	{
+		id: "signin",
+		title: "Sign in with GitHub",
+		group: "Account",
+		status: (_s, _r, _m, gh) =>
+			gh?.enabled
+				? { text: `On for @${gh.login}` }
+				: gh?.available === false
+					? { text: "Needs a public URL" }
+					: { text: "Not set up" },
+		Own: GitHubSection,
+	},
+	{
+		id: "password",
+		title: "Password",
+		group: "Account",
+		status: (_s, _r, me) => ({ text: me.passwordFromEnv ? "Set on the server" : "Change it here" }),
+		Own: PasswordSection,
+	},
+];
 
-			<Section id="public" title="Public pages">
-				<Toggle
-					label="Anyone can read the brief and stories"
-					checked={d.publicPages}
-					onChange={(v) =>
-						update((s) => {
-							s.publicPages = v;
-						})
-					}
-					hint="Without your votes. Everything else still needs a login."
-				/>
-			</Section>
+const GROUPS = [...new Set(AREAS.map((a) => a.group))];
 
-			<Section id="outputs" title="Home Assistant and feed readers">
-				{res?.feedUrl ? (
-					<>
-						<CopyLine
-							label="Latest brief as JSON (Home Assistant REST sensor)"
-							value={res.briefJsonUrl}
-						/>
-						<CopyLine label="RSS of the best stories" value={res.feedUrl} />
-						<div>
-							<LinkButton
-								onClick={async () => {
-									if (!confirm("Old links stop working. Continue?")) return;
-									await apiSend("POST", "/settings/read-token");
-									data.reload();
-								}}
-							>
-								Make new links
-							</LinkButton>
-						</div>
-					</>
-				) : (
-					<p class="text-muted">
-						Set TEMPOBRIEF_PUBLIC_URL on the server to get these links, and tracked links and vote
-						buttons in deliveries.
-					</p>
-				)}
-			</Section>
+/** /settings: the list of areas. /settings/:area: one area's page. */
+export function Settings({ me, area }: { me: Me; area?: string }) {
+	const found = AREAS.find((a) => a.id === area);
+	if (area && !found) return <PageHead title="Not found" />;
+	return found ? <AreaPage area={found} /> : <SettingsList me={me} />;
+}
 
-			<GitHubSection />
+function SettingsList({ me }: { me: Me }) {
+	const data = useApi<SettingsResponse>("/settings", 0);
+	const gh = useApi<GitHubStatus>("/github", 0);
+	if (!data.data)
+		return data.error ? (
+			<ErrorLine message={data.error.message} onRetry={data.reload} />
+		) : (
+			<Loading />
+		);
+	const res = data.data;
+	return (
+		<>
+			<PageHead title="Settings" />
+			{GROUPS.map((g) => (
+				<section key={g}>
+					<SectionLabel>{g}</SectionLabel>
+					<ul>
+						{AREAS.filter((a) => a.group === g && !(a.id === "password" && me.passwordFromEnv)).map(
+							(a) => {
+								const st = a.status(res.settings, res, me, gh.data);
+								return (
+									<li key={a.id} class="border-line border-b">
+										<a
+											href={`/settings/${a.id}`}
+											class="flex min-h-14 items-center gap-3 py-2.5 hover:text-accent"
+										>
+											<span class="min-w-0 flex-1">
+												<span class="block font-medium">{a.title}</span>
+												<span
+													class={`block truncate text-label ${st.warn ? "text-warn" : "text-muted"}`}
+												>
+													{st.text}
+												</span>
+											</span>
+											<span class="text-faint">›</span>
+										</a>
+									</li>
+								);
+							},
+						)}
+					</ul>
+				</section>
+			))}
+		</>
+	);
+}
 
-			{!me.passwordFromEnv && <PasswordSection />}
+/** One area of settings, with its own Save bar once something changed. */
+function AreaPage({ area }: { area: Area }) {
+	const data = useApi<SettingsResponse>("/settings", 0);
+	const draft = useSignal<SettingsData | null>(null);
+	const saved = useSignal("");
+	const busy = useSignal(false);
+	const error = useSignal<string | null>(null);
 
+	useEffect(() => {
+		if (data.data && draft.value === null) {
+			draft.value = structuredClone(data.data.settings);
+			saved.value = JSON.stringify(data.data.settings);
+		}
+	}, [data.data]);
+
+	if (area.Own) {
+		const Own = area.Own;
+		return (
+			<>
+				<AreaHead title={area.title} dirty={false} />
+				<div class="mt-6 flex flex-col gap-4">
+					<Own />
+				</div>
+			</>
+		);
+	}
+	if (!draft.value || !data.data)
+		return data.error ? (
+			<ErrorLine message={data.error.message} onRetry={data.reload} />
+		) : (
+			<Loading />
+		);
+	const d = draft.value;
+	const dirty = JSON.stringify(d) !== saved.value;
+
+	/** Edit a copy of the draft; signals need a new object to notice. */
+	const update = (fn: (s: SettingsData) => void) => {
+		const next = structuredClone(d);
+		fn(next);
+		draft.value = next;
+	};
+
+	const save = async () => {
+		busy.value = true;
+		error.value = null;
+		try {
+			const res = await apiSend<SettingsResponse>("PUT", "/settings", d);
+			draft.value = structuredClone(res.settings);
+			saved.value = JSON.stringify(res.settings);
+			invalidate();
+		} catch (err) {
+			error.value = err instanceof ApiError ? err.message : "Could not save.";
+		} finally {
+			busy.value = false;
+		}
+	};
+
+	const Editor = area.Editor;
+	return (
+		<>
+			<AreaHead title={area.title} dirty={dirty} />
+			<div class="mt-6 flex flex-col gap-4">
+				<Editor d={d} update={update} res={data.data} dirty={dirty} reload={data.reload} />
+			</div>
 			{/* Room for the save bar, so it never covers the last field. */}
 			<div class="h-24" />
 			{(dirty || error.value) && (
 				<div class="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-20 border-line border-t bg-bg sm:bottom-0">
 					<div class="mx-auto flex max-w-[720px] flex-wrap items-center gap-3 px-5 py-3 sm:px-0">
 						<PrimaryButton disabled={busy.value || !dirty} onClick={save}>
-							{busy.value ? "Saving" : "Save changes"}
+							{busy.value ? "Saving" : "Save"}
 						</PrimaryButton>
 						<SecondaryButton
 							disabled={busy.value}
@@ -458,20 +652,21 @@ export function Settings({ me }: { me: Me }) {
 	);
 }
 
-function Section({
-	id,
-	title,
-	children,
-}: {
-	id: string;
-	title: string;
-	children: ComponentChildren;
-}) {
+/** Back to the list, asking first when there are unsaved changes. */
+function AreaHead({ title, dirty }: { title: string; dirty: boolean }) {
 	return (
-		<section id={id} class="scroll-mt-4">
-			<SectionLabel>{title}</SectionLabel>
-			<div class="mt-4 flex flex-col gap-4">{children}</div>
-		</section>
+		<>
+			<a
+				href="/settings"
+				class="mt-6 inline-flex min-h-11 items-center text-accent hover:text-ink"
+				onClick={(e) => {
+					if (dirty && !confirm("Leave without saving?")) e.preventDefault();
+				}}
+			>
+				‹ Settings
+			</a>
+			<h1 class="font-medium text-title-sm tracking-[-0.03em] sm:text-title">{title}</h1>
+		</>
 	);
 }
 
@@ -867,7 +1062,7 @@ function GitHubSection() {
 	};
 
 	return (
-		<Section id="signin" title="Sign in with GitHub">
+		<>
 			{gh.enabled ? (
 				<>
 					<p>
@@ -905,7 +1100,7 @@ function GitHubSection() {
 				<p class="text-muted">Needs TEMPOBRIEF_PUBLIC_URL, so GitHub can send you back.</p>
 			)}
 			{result && <p class={`text-label ${result.bad ? "text-bad" : "text-good"}`}>{result.text}</p>}
-		</Section>
+		</>
 	);
 }
 
@@ -914,7 +1109,7 @@ function PasswordSection() {
 	const next = useSignal("");
 	const message = useSignal<{ text: string; bad: boolean } | null>(null);
 	return (
-		<Section id="password" title="Password">
+		<>
 			<TextField
 				label="Current password"
 				secret
@@ -956,6 +1151,6 @@ function PasswordSection() {
 				</SecondaryButton>
 				{message.value && <p class="mt-2 text-label text-bad">{message.value.text}</p>}
 			</div>
-		</Section>
+		</>
 	);
 }

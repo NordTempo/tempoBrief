@@ -184,7 +184,7 @@ func (s *Server) githubRemove(w http.ResponseWriter, r *http.Request) {
 // code for its credentials; the app's owner becomes the allowed account.
 func (s *Server) githubSetupDone(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.checkState(w, r, "setup"); !ok {
-		http.Redirect(w, r, "/settings?github=expired", http.StatusFound)
+		http.Redirect(w, r, "/settings/signin?github=expired", http.StatusFound)
 		return
 	}
 	var app struct {
@@ -199,20 +199,20 @@ func (s *Server) githubSetupDone(w http.ResponseWriter, r *http.Request) {
 	code := url.PathEscape(r.URL.Query().Get("code"))
 	if err := s.githubJSON(r.Context(), http.MethodPost, s.github.API+"/app-manifests/"+code+"/conversions", nil, "", &app); err != nil {
 		s.Log.Error("github app setup", "err", err)
-		http.Redirect(w, r, "/settings?github=failed", http.StatusFound)
+		http.Redirect(w, r, "/settings/signin?github=failed", http.StatusFound)
 		return
 	}
 	g := githubLogin{ClientID: app.ClientID, ClientSecret: app.ClientSecret, AppURL: app.HTMLURL,
 		UserID: app.Owner.ID, Login: app.Owner.Login}
 	if !g.ready() {
-		http.Redirect(w, r, "/settings?github=failed", http.StatusFound)
+		http.Redirect(w, r, "/settings/signin?github=failed", http.StatusFound)
 		return
 	}
 	if err := s.DB.SetSetting(r.Context(), githubSettingKey, g); err != nil {
 		s.internal(w, err)
 		return
 	}
-	http.Redirect(w, r, "/settings?github=ready#signin", http.StatusFound)
+	http.Redirect(w, r, "/settings/signin?github=ready", http.StatusFound)
 }
 
 // GET /auth/github/login sends the browser to GitHub to sign in.

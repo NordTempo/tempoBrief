@@ -6,7 +6,7 @@ const STEPS = [
 		key: "interests",
 		label: "Say what you want to read",
 		detail: "A few sentences, like briefing an editor.",
-		href: "/settings#interests",
+		href: "/settings/interests",
 	},
 	{
 		key: "feeds",
@@ -18,13 +18,13 @@ const STEPS = [
 		key: "provider",
 		label: "Connect a model",
 		detail: "Claude, OpenAI-compatible, or a logged-in CLI. Then press Test.",
-		href: "/settings#model",
+		href: "/settings/model",
 	},
 	{
 		key: "channel",
 		label: "Choose where briefs go",
 		detail: "Discord, email, ntfy or a webhook. Optional: the web app always has them.",
-		href: "/settings#channels",
+		href: "/settings/channels",
 	},
 ];
 

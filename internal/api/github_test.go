@@ -99,7 +99,7 @@ func TestSignInWithGitHubLetsOnlyTheAppOwnerIn(t *testing.T) {
 	}
 	// GitHub sends the reader back with a code; the app's owner becomes the allowed account.
 	done := send(reader, "GET", "/auth/github/setup?code=abc&state="+stateOf(setup.Action), "")
-	if location(done) != "/settings?github=ready#signin" {
+	if location(done) != "/settings/signin?github=ready" {
 		t.Fatalf("setup done: %s", location(done))
 	}
 
