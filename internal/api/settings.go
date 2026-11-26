@@ -107,7 +107,7 @@ func (s *Server) testChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	msg := deliver.Message{Kind: deliver.KindAlert, Title: "tempoBrief test", Sections: []deliver.Section{{
 		Topic: "Test", Stories: []deliver.Story{{
-			Title: "tempoBrief can reach this channel", Summary: "This is a test message from Settings.",
+			ID: deliver.TestStoryID, Title: "tempoBrief can reach this channel", Summary: "This is a test message from Settings.",
 			URL: "https://github.com/NordTempo/tempoBrief", Score: 10, Sources: []string{"tempoBrief"},
 		}},
 	}}}

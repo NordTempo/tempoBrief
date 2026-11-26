@@ -2,6 +2,7 @@ package deliver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -12,6 +13,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"github.com/NordTempo/tempoBrief/internal/settings"
+	"github.com/NordTempo/tempoBrief/internal/store"
 )
 
 // discordHub keeps one gateway session per bot token. The bot needs no
@@ -93,23 +95,42 @@ func (h *discordHub) onInteraction(s *discordgo.Session, i *discordgo.Interactio
 	h.mu.Lock()
 	owner := h.owners[i.ChannelID]
 	h.mu.Unlock()
-	if owner != "" && (user == nil || user.ID != owner) {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{Content: "Only the owner can vote.", Flags: discordgo.MessageFlagsEphemeral},
-		})
-		return
+	userID := ""
+	if user != nil {
+		userID = user.ID
 	}
 	id, _ := strconv.ParseInt(m[1], 10, 64)
 	vote, _ := strconv.Atoi(m[2])
+	s.InteractionRespond(i.Interaction, h.answerVote(id, vote, userID, owner))
+}
+
+// answerVote records a vote from a button and says what Discord shows. It
+// always answers: without one, Discord tells the reader the app did not
+// respond. Notes only the voter sees are ephemeral.
+func (h *discordHub) answerVote(id int64, vote int, userID, owner string) *discordgo.InteractionResponse {
+	note := func(text string) *discordgo.InteractionResponse {
+		return &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: text, Flags: discordgo.MessageFlagsEphemeral},
+		}
+	}
+	if owner != "" && userID != owner {
+		return note("Only the owner can vote.")
+	}
+	if id == TestStoryID {
+		return note("The buttons work. Votes on real stories teach tempoBrief what you like.")
+	}
 	if err := h.vote(context.Background(), id, vote); err != nil {
 		h.log.Error("discord: vote failed", "story", id, "err", err)
-		return
+		if errors.Is(err, store.ErrNotFound) {
+			return note("That story is no longer in tempoBrief, so the vote was not saved.")
+		}
+		return note("Could not save the vote. Try again.")
 	}
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	return &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{Components: voteRow(id, vote)},
-	})
+	}
 }
 
 func (h *discordHub) send(ctx context.Context, c settings.Channel, m Message) error {

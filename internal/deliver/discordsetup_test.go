@@ -4,10 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/bwmarrin/discordgo"
+
+	"github.com/NordTempo/tempoBrief/internal/store"
 )
 
 func TestCheckDiscordBotFindsOwnerInviteAndChannels(t *testing.T) {
@@ -48,5 +54,42 @@ func TestCheckDiscordBotFindsOwnerInviteAndChannels(t *testing.T) {
 	}
 	if _, err := CheckDiscordBot(context.Background(), "bad"); !errors.Is(err, ErrDiscordToken) {
 		t.Errorf("bad token: %v", err)
+	}
+}
+
+// Discord shows "the application didn't respond" unless every click gets an
+// answer, also when the vote cannot be saved.
+func TestEveryVoteClickGetsAnAnswer(t *testing.T) {
+	saved := map[int64]int{}
+	h := newDiscordHub(slog.New(slog.NewTextHandler(io.Discard, nil)), func(_ context.Context, id int64, vote int) error {
+		if id == 404 {
+			return store.ErrNotFound
+		}
+		saved[id] = vote
+		return nil
+	})
+	for _, c := range []struct {
+		id          int64
+		user, owner string
+		want        string // ephemeral note, or "" for the updated buttons
+	}{
+		{7, "u1", "", ""},
+		{7, "u2", "u1", "Only the owner can vote."},
+		{TestStoryID, "u1", "u1", "The buttons work."},
+		{404, "u1", "", "no longer in tempoBrief"},
+	} {
+		r := h.answerVote(c.id, 1, c.user, c.owner)
+		if r == nil || r.Data == nil {
+			t.Fatalf("story %d: no answer", c.id)
+		}
+		if c.want == "" && r.Type != discordgo.InteractionResponseUpdateMessage {
+			t.Errorf("story %d: want the buttons updated, got %q", c.id, r.Data.Content)
+		}
+		if c.want != "" && !strings.Contains(r.Data.Content, c.want) {
+			t.Errorf("story %d: got %q, want %q", c.id, r.Data.Content, c.want)
+		}
+	}
+	if len(saved) != 1 || saved[7] != 1 {
+		t.Errorf("saved votes: %v", saved)
 	}
 }

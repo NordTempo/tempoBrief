@@ -65,6 +65,10 @@ func (m Message) Stories() []Story {
 // VoteFunc records a vote coming from a channel.
 type VoteFunc func(ctx context.Context, storyID int64, vote int) error
 
+// TestStoryID is the story ID of the sample "Send a test" posts. Its vote
+// buttons only answer that they work.
+const TestStoryID = 0
+
 // Deliverer sends messages. Discord keeps a gateway connection per bot token
 // for its vote buttons; the other channels are plain requests.
 type Deliverer struct {
